@@ -167,6 +167,11 @@ const api = {
     ipcRenderer.invoke("fs:removePath", targetPath) as Promise<{ ok: true }>,
   mkdir: (dirPath: string) =>
     ipcRenderer.invoke("fs:mkdir", dirPath) as Promise<{ ok: true }>,
+  renamePath: (fromPath: string, toPath: string) =>
+    ipcRenderer.invoke("fs:renamePath", fromPath, toPath) as Promise<
+      | { ok: true; path: string; size: number }
+      | { ok: false; message: string; code?: string }
+    >,
   streamFile: (
     filePath: string,
     options?: { sessionFilePath?: string },
@@ -213,6 +218,9 @@ const api = {
     ipcRenderer.invoke("shell:showItemInFolder", filePath) as Promise<void>,
   openNewWindow: () => {
     ipcRenderer.send("window:new");
+  },
+  openFileInNewWindow: (filePath: string) => {
+    ipcRenderer.send("window:new", filePath);
   },
   toggleDevTools: () =>
     ipcRenderer.invoke("window:toggleDevTools") as Promise<void>,

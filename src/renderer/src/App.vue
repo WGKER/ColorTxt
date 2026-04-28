@@ -26,6 +26,7 @@ import { useTxtStreamPipeline } from "./composables/useTxtStreamPipeline";
 import { fileHistoryKey } from "./stores/recentHistoryStore";
 import {
   assignHighlightTermToColorForFile,
+  fileNameKey,
   findFileMetaRecord,
   removeHighlightTermFromFile,
   upsertFileMetaRecord,
@@ -88,6 +89,7 @@ import { appAlert } from "./services/appAlert";
 import { mergeShortcutBindings } from "./services/shortcutUtils";
 import {
   syncTxtFilesCategoriesAfterCatalogEdit,
+  normalizeTxtFileItem,
   type TxtFileItem,
 } from "./services/fileListService";
 import {
@@ -460,6 +462,7 @@ const {
   persistWindowUnloadState,
   persistFileListCache,
   persistFileMeta,
+  persistRecentFiles,
   touchRecentFile,
   upsertBookmark,
   removeBookmark,
@@ -567,6 +570,122 @@ function onApplyCategoryCatalog(payload: {
     persistFileListCache();
   }
   persistSettings();
+}
+
+function replaceFileBaseName(filePath: string, newBaseName: string): string {
+  const idx = Math.max(filePath.lastIndexOf("/"), filePath.lastIndexOf("\\"));
+  if (idx < 0) return newBaseName;
+  return `${filePath.slice(0, idx + 1)}${newBaseName}`;
+}
+
+async function onRenameFilePath(payload: { oldPath: string; newName: string }) {
+  const oldPath = payload.oldPath.trim();
+  const newName = payload.newName.trim();
+  if (!oldPath || !newName) return;
+  const targetPath = replaceFileBaseName(oldPath, newName);
+  if (fileHistoryKey(targetPath) === fileHistoryKey(oldPath)) return;
+  const result = await window.colorTxt.renamePath(oldPath, targetPath);
+  if (!result.ok) {
+    await appAlert(`重命名失败：${result.message}`);
+    return;
+  }
+
+  const nextPath = result.path;
+  const oldKey = fileHistoryKey(oldPath);
+  const nextKey = fileHistoryKey(nextPath);
+  txtFiles.value = txtFiles.value.map((f) => {
+    if (fileHistoryKey(f.path) !== oldKey) return f;
+    return normalizeTxtFileItem({
+      ...f,
+      path: nextPath,
+      size: result.size,
+    });
+  });
+
+  recentFiles.value = recentFiles.value.map((item) =>
+    fileHistoryKey(item.path) === oldKey
+      ? { ...item, path: nextPath }
+      : item,
+  );
+
+  // file.meta 迁移：优先按旧路径精确匹配；若不存在再按旧文件名兜底（仅唯一候选时迁移，避免同名串数据）。
+  let prevMeta = fileMetaRecords.value.find((m) => fileHistoryKey(m.path) === oldKey);
+  if (!prevMeta) {
+    const oldNameKey = fileNameKey(oldPath);
+    const fallbackCandidates = fileMetaRecords.value.filter(
+      (m) => m.fileName === oldNameKey,
+    );
+    if (fallbackCandidates.length === 1) {
+      prevMeta = fallbackCandidates[0];
+    }
+  }
+  if (prevMeta) {
+    const prevMetaKey = fileHistoryKey(prevMeta.path);
+    const migrated: FileMetaRecord = {
+      ...prevMeta,
+      path: nextPath,
+      fileName: fileNameKey(nextPath),
+      updatedAt: Date.now(),
+    };
+    fileMetaRecords.value = [
+      migrated,
+      ...fileMetaRecords.value.filter((m) => {
+        const k = fileHistoryKey(m.path);
+        if (k === prevMetaKey) return false;
+        if (k === oldKey) return false;
+        if (k === nextKey) return false;
+        return true;
+      }),
+    ];
+  }
+
+  // 进度映射 key 基于 path，重命名后需迁移，否则 UI 可能仍引用旧路径进度。
+  if (metaProgressByPathKey.value.has(oldKey)) {
+    const m = new Map(metaProgressByPathKey.value);
+    const v = m.get(oldKey);
+    m.delete(oldKey);
+    if (typeof v === "number") m.set(nextKey, v);
+    metaProgressByPathKey.value = m;
+  }
+
+  if (currentFile.value && fileHistoryKey(currentFile.value) === oldKey) {
+    currentFile.value = nextPath;
+  }
+  if (
+    physicalReaderPath.value &&
+    fileHistoryKey(physicalReaderPath.value) === oldKey
+  ) {
+    physicalReaderPath.value = nextPath;
+  }
+  if (
+    activeStreamFilePath.value &&
+    fileHistoryKey(activeStreamFilePath.value) === oldKey
+  ) {
+    activeStreamFilePath.value = nextPath;
+  }
+
+  persistFileListCache();
+  persistRecentFiles();
+  // 落盘时机保持原有策略：走现有防抖 + 门控；窗口卸载仍会兜底立即落盘。
+  persistFileMeta();
+}
+
+function onOpenFileInNewWindow(path: string) {
+  if (!path.trim()) return;
+  window.colorTxt.openFileInNewWindow(path);
+}
+
+function onClearFileMeta(path: string) {
+  const key = fileHistoryKey(path);
+  const next = fileMetaRecords.value.filter((m) => fileHistoryKey(m.path) !== key);
+  if (next.length === fileMetaRecords.value.length) return;
+  fileMetaRecords.value = next;
+  if (metaProgressByPathKey.value.has(key)) {
+    const m = new Map(metaProgressByPathKey.value);
+    m.delete(key);
+    metaProgressByPathKey.value = m;
+  }
+  persistFileMeta();
 }
 
 /** 顶栏「更多」里最近文件：仅路径来自 recent，进度来自 meta（当前书用 live） */
@@ -1185,6 +1304,9 @@ useAppShellThemeWatch({
           @clear-file-list="clearFileList"
           @clear-file-list-category="clearFileListForCategory"
           @remove-file-list="removeFileList"
+          @clear-file-meta="onClearFileMeta"
+          @rename-file-path="onRenameFilePath"
+          @open-file-in-new-window="onOpenFileInNewWindow"
           @close-current-file="closeCurrentFile"
           @jump-to-bookmark="jumpToBookmark"
           @clear-bookmarks="clearCurrentFileBookmarks"

@@ -10,9 +10,9 @@ import {
   watch,
   type ComponentPublicInstance,
 } from "vue";
-import AppContextMenu from "./AppContextMenu.vue";
 import AppCustomSelect from "./AppCustomSelect.vue";
 import CategoryPickerMenu from "./CategoryPickerMenu.vue";
+import FileCategoryFlyoutList from "./FileCategoryFlyoutList.vue";
 import FileCategoryManageModal from "./FileCategoryManageModal.vue";
 import VirtualList from "./VirtualList.vue";
 import {
@@ -74,6 +74,9 @@ const emit = defineEmits<{
     },
   ];
   setFilesCategory: [paths: string[], category: string];
+  renameFilePath: [payload: { oldPath: string; newName: string }];
+  "open-file-in-new-window": [path: string];
+  "clear-file-meta": [path: string];
   openFile: [item: SidebarFileItem];
   importDroppedPaths: [paths: string[]];
   clearFileList: [];
@@ -82,6 +85,17 @@ const emit = defineEmits<{
   bindListRef: [value: InstanceType<typeof VirtualList> | null];
   "update:fileListEditing": [editing: boolean];
 }>();
+
+function baseNameFromPath(filePath: string): string {
+  const idx = Math.max(filePath.lastIndexOf("/"), filePath.lastIndexOf("\\"));
+  return idx >= 0 ? filePath.slice(idx + 1) : filePath;
+}
+
+function fileNameSelectionRange(fileName: string): { start: number; end: number } {
+  const dot = fileName.lastIndexOf(".");
+  if (dot > 0) return { start: 0, end: dot };
+  return { start: 0, end: fileName.length };
+}
 
 function fileRowProgress(filePath: string): number | undefined {
   return fileRowProgressForPath(
@@ -177,6 +191,89 @@ const {
   onRemoveSelectedFileListItems,
 } = selection;
 
+const renamingFilePath = ref<string | null>(null);
+const renameDraft = ref("");
+const renameInputRef = ref<HTMLInputElement | null>(null);
+const renameCommitting = ref(false);
+
+function startRenamingFile(path: string) {
+  const row = props.files.find((f) => f.path === path);
+  const fileName = row?.name || baseNameFromPath(path);
+  renamingFilePath.value = path;
+  renameDraft.value = fileName;
+}
+
+async function cancelRenamingFile() {
+  renamingFilePath.value = null;
+  renameDraft.value = "";
+  renameCommitting.value = false;
+  await nextTick();
+  listFocusEl.value?.focus({ preventScroll: true });
+}
+
+function commitRenamingFile() {
+  const oldPath = renamingFilePath.value;
+  if (!oldPath || renameCommitting.value) return;
+  renameCommitting.value = true;
+  const newName = renameDraft.value.trim();
+  const oldName = baseNameFromPath(oldPath);
+  if (!newName || newName === oldName) {
+    cancelRenamingFile();
+    return;
+  }
+  emit("renameFilePath", { oldPath, newName });
+  cancelRenamingFile();
+}
+
+function shouldIgnoreGlobalRenameHotkey(): boolean {
+  const el = document.activeElement as HTMLElement | null;
+  if (!el) return false;
+  const tag = el.tagName.toLowerCase();
+  if (tag === "input" || tag === "textarea" || tag === "select") return true;
+  if (el.isContentEditable) return true;
+  return false;
+}
+
+function onFileListRootKeydown(ev: KeyboardEvent) {
+  onListKeydown(ev);
+  if (ev.key !== "F2") return;
+  if (ev.altKey || ev.ctrlKey || ev.metaKey || ev.shiftKey) return;
+  if (renamingFilePath.value) return;
+  if (shouldIgnoreGlobalRenameHotkey()) return;
+  let renameTargetPath: string | null = null;
+  if (isEditingFileList.value) {
+    const lastSelected = lastSelectedFilePath.value;
+    if (lastSelected && props.files.some((f) => f.path === lastSelected)) {
+      renameTargetPath = lastSelected;
+    } else if (selectedFilePaths.value.length > 0) {
+      const fallback = selectedFilePaths.value[selectedFilePaths.value.length - 1]!;
+      if (props.files.some((f) => f.path === fallback)) {
+        renameTargetPath = fallback;
+      }
+    }
+  } else if (
+    props.currentFilePath &&
+    props.files.some((f) => f.path === props.currentFilePath)
+  ) {
+    renameTargetPath = props.currentFilePath;
+  }
+  if (!renameTargetPath) return;
+  // v-show 隐藏（display:none）时避免误触；仅文件面板可见时响应。
+  if (!listFocusEl.value || listFocusEl.value.offsetParent === null) return;
+  ev.preventDefault();
+  startRenamingFile(renameTargetPath);
+}
+
+watch(renamingFilePath, async (path) => {
+  if (!path) return;
+  await nextTick();
+  const input = renameInputRef.value;
+  if (!input) return;
+  input.focus({ preventScroll: true });
+  const range = fileNameSelectionRange(input.value);
+  input.setSelectionRange(range.start, range.end);
+});
+
 watch(
   isEditingFileList,
   (v) => emit("update:fileListEditing", v),
@@ -196,6 +293,213 @@ const menus = reactive(
     selectSinglePathForContextMenu: selection.selectSinglePathForContextMenu,
   }),
 );
+
+const fileCtxMenuPanelRef = useTemplateRef<HTMLElement>("fileCtxMenuPanelRef");
+const fileCtxCategoryFlyoutRef = useTemplateRef<HTMLElement>(
+  "fileCtxCategoryFlyoutRef",
+);
+const fileCtxMenuLeft = ref(0);
+const fileCtxMenuTop = ref(0);
+const fileCtxCategorySubOpen = ref(false);
+/** 子菜单在右侧放不下时改为向左展开（appShellMenuFlyout--left） */
+const fileCtxFlyoutUseLeft = ref(false);
+/** 子菜单在视口内做最后平移修正（翻转后仍可能上下溢出） */
+const fileCtxFlyoutTransform = ref("");
+/** 子菜单完成左右翻转与 translate 夹紧后再显示，避免首帧错位闪烁 */
+const fileCtxFlyoutPositionReady = ref(false);
+
+const fileCtxFlyoutPanelStyle = computed(() => {
+  const s: Record<string, string> = {};
+  if (fileCtxFlyoutTransform.value) {
+    s.transform = fileCtxFlyoutTransform.value;
+  }
+  if (fileCtxCategorySubOpen.value) {
+    s.visibility = fileCtxFlyoutPositionReady.value ? "visible" : "hidden";
+    s.pointerEvents = fileCtxFlyoutPositionReady.value ? "auto" : "none";
+  }
+  return s;
+});
+
+function closeFileCtxCategorySub() {
+  fileCtxCategorySubOpen.value = false;
+  fileCtxFlyoutUseLeft.value = false;
+  fileCtxFlyoutTransform.value = "";
+  fileCtxFlyoutPositionReady.value = false;
+}
+
+function clampFileContextMenuToViewport() {
+  if (!menus.fileContextMenuOpen) return;
+  const el = fileCtxMenuPanelRef.value;
+  if (!el) return;
+  const margin = 8;
+  const rawX = menus.fileContextMenuX;
+  const rawY = menus.fileContextMenuY;
+  const maxX = Math.max(margin, window.innerWidth - el.offsetWidth - margin);
+  const maxY = Math.max(margin, window.innerHeight - el.offsetHeight - margin);
+  fileCtxMenuLeft.value = Math.min(Math.max(margin, rawX), maxX);
+  fileCtxMenuTop.value = Math.min(Math.max(margin, rawY), maxY);
+}
+
+function applyFileCtxCategoryFlyoutTranslateClamp() {
+  const flyout = fileCtxCategoryFlyoutRef.value;
+  if (!flyout || !fileCtxCategorySubOpen.value) return;
+  const margin = 8;
+  const r = flyout.getBoundingClientRect();
+  let dx = 0;
+  let dy = 0;
+  if (r.bottom > window.innerHeight - margin) {
+    dy = window.innerHeight - margin - r.bottom;
+  }
+  if (r.top + dy < margin) {
+    dy = margin - r.top;
+  }
+  if (r.right + dx > window.innerWidth - margin) {
+    dx = window.innerWidth - margin - r.right;
+  }
+  if (r.left + dx < margin) {
+    dx = margin - r.left;
+  }
+  fileCtxFlyoutTransform.value =
+    dx !== 0 || dy !== 0 ? `translate(${dx}px, ${dy}px)` : "";
+}
+
+async function layoutFileCtxCategoryFlyoutInViewport(opts?: { instant?: boolean }) {
+  if (!menus.fileContextMenuOpen || !fileCtxCategorySubOpen.value) {
+    closeFileCtxCategorySub();
+    return;
+  }
+  if (!opts?.instant) {
+    fileCtxFlyoutPositionReady.value = false;
+  }
+  fileCtxFlyoutUseLeft.value = false;
+  fileCtxFlyoutTransform.value = "";
+  await nextTick();
+  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  const flyout = fileCtxCategoryFlyoutRef.value;
+  if (!flyout || !fileCtxCategorySubOpen.value) {
+    fileCtxFlyoutPositionReady.value = true;
+    return;
+  }
+  const margin = 8;
+  const r = flyout.getBoundingClientRect();
+  if (r.right > window.innerWidth - margin) {
+    fileCtxFlyoutUseLeft.value = true;
+    await nextTick();
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  }
+  applyFileCtxCategoryFlyoutTranslateClamp();
+  fileCtxFlyoutPositionReady.value = true;
+}
+
+async function layoutFileContextMenuPanel() {
+  if (!menus.fileContextMenuOpen) return;
+  fileCtxMenuLeft.value = menus.fileContextMenuX;
+  fileCtxMenuTop.value = menus.fileContextMenuY;
+  if (!fileCtxCategorySubOpen.value) {
+    closeFileCtxCategorySub();
+  }
+  await nextTick();
+  requestAnimationFrame(() => {
+    clampFileContextMenuToViewport();
+    if (fileCtxCategorySubOpen.value) {
+      void layoutFileCtxCategoryFlyoutInViewport();
+    }
+  });
+}
+
+watch(
+  () =>
+    [
+      menus.fileContextMenuOpen,
+      menus.fileContextMenuX,
+      menus.fileContextMenuY,
+      fileCtxCategorySubOpen.value,
+    ] as const,
+  async ([open]) => {
+    if (!open) {
+      closeFileCtxCategorySub();
+      return;
+    }
+    await layoutFileContextMenuPanel();
+  },
+);
+
+function onWindowResizeForFileCtxMenu() {
+  if (!menus.fileContextMenuOpen) return;
+  clampFileContextMenuToViewport();
+  if (fileCtxCategorySubOpen.value) {
+    void layoutFileCtxCategoryFlyoutInViewport({ instant: true });
+  }
+}
+
+onMounted(() => {
+  window.addEventListener("resize", onWindowResizeForFileCtxMenu);
+});
+onBeforeUnmount(() => {
+  window.removeEventListener("resize", onWindowResizeForFileCtxMenu);
+});
+
+function fileCtxTargetPath(): string | null {
+  return menus.fileContextMenuFilePath;
+}
+
+function closeFileContextMenuAll() {
+  menus.closeFileContextMenu();
+  closeFileCtxCategorySub();
+}
+
+function onFileCtxRename() {
+  const target = fileCtxTargetPath();
+  if (!target) return;
+  startRenamingFile(target);
+  closeFileContextMenuAll();
+}
+
+function onFileCtxRemove() {
+  const target = fileCtxTargetPath();
+  if (!target) return;
+  emit("removeFileList", [target]);
+  closeFileContextMenuAll();
+}
+
+function onFileCtxClearFileMeta() {
+  const target = fileCtxTargetPath();
+  if (!target) return;
+  emit("clear-file-meta", target);
+  closeFileContextMenuAll();
+}
+
+function onFileCtxReveal() {
+  const target = fileCtxTargetPath();
+  if (!target) return;
+  void window.colorTxt.showItemInFolder(target).catch(() => {});
+  closeFileContextMenuAll();
+}
+
+function onFileCtxOpenInNewWindow() {
+  const target = fileCtxTargetPath();
+  if (!target) return;
+  emit("open-file-in-new-window", target);
+  closeFileContextMenuAll();
+}
+
+function onFileCtxCategoryPicked(name: string) {
+  const target = fileCtxTargetPath();
+  if (!target) return;
+  emit("setFilesCategory", [target], name);
+  closeFileContextMenuAll();
+}
+
+function onEditCtxRename() {
+  const target =
+    menus.editContextMenuFilePath ||
+    lastSelectedFilePath.value ||
+    selectedFilePaths.value[selectedFilePaths.value.length - 1] ||
+    null;
+  if (!target) return;
+  startRenamingFile(target);
+  menus.closeEditContextMenu();
+}
 
 const categoryToolbarSelectRef = ref<InstanceType<typeof AppCustomSelect> | null>(
   null,
@@ -399,7 +703,7 @@ onBeforeUnmount(() => {
       ref="listFocusEl"
       class="sidebarTabBody"
       :tabindex="isEditingFileList ? 0 : -1"
-      @keydown="onListKeydown"
+      @keydown="onFileListRootKeydown"
     >
       <div
         class="fileToolbarRow"
@@ -492,21 +796,15 @@ onBeforeUnmount(() => {
                     lastSelectedFilePath === filesFiltered[index].path,
                 }"
                 :title="filesFiltered[index].path"
-                @click="onFileItemClick(filesFiltered[index], index, $event)"
+                @click="
+                  renamingFilePath === filesFiltered[index].path
+                    ? undefined
+                    : onFileItemClick(filesFiltered[index], index, $event)
+                "
                 @contextmenu="
                   menus.onFileItemContextMenu(filesFiltered[index].path, $event)
                 "
               >
-                <span
-                  v-if="fileItemShowCategoryMarkRow(filesFiltered[index])"
-                  class="fileItemCatMark"
-                  aria-hidden="true"
-                  :style="{
-                    backgroundColor: borderColorForFileRow(
-                      filesFiltered[index],
-                    ),
-                  }"
-                />
                 <span class="fileItemMain">
                   <input
                     v-if="isEditingFileList"
@@ -518,7 +816,30 @@ onBeforeUnmount(() => {
                     tabindex="-1"
                     aria-hidden="true"
                   />
-                  <span class="itemName">{{ filesFiltered[index].name }}</span>
+                  <span
+                    v-if="fileItemShowCategoryMarkRow(filesFiltered[index])"
+                    class="fileItemCatMark"
+                    aria-hidden="true"
+                    :style="{
+                      backgroundColor: borderColorForFileRow(
+                        filesFiltered[index],
+                      ),
+                    }"
+                  />
+                  <input
+                    v-if="renamingFilePath === filesFiltered[index].path"
+                    ref="renameInputRef"
+                    v-model="renameDraft"
+                    class="fileItemRenameInput"
+                    type="text"
+                    spellcheck="false"
+                    autocomplete="off"
+                    @click.stop
+                    @keydown.stop.enter.prevent="commitRenamingFile"
+                    @keydown.stop.esc.prevent="cancelRenamingFile"
+                    @blur="commitRenamingFile"
+                  />
+                  <span v-else class="itemName">{{ filesFiltered[index].name }}</span>
                   <span
                     v-if="
                       typeof fileRowProgress(filesFiltered[index].path) ===
@@ -599,15 +920,110 @@ onBeforeUnmount(() => {
         </button>
       </template>
     </div>
-    <AppContextMenu
-      :open="menus.fileContextMenuOpen"
-      :x="menus.fileContextMenuX"
-      :y="menus.fileContextMenuY"
-      :items="menus.fileContextMenuItems"
-      :min-width="160"
-      @close="menus.closeFileContextMenu"
-      @select="menus.onFileContextMenuSelect"
-    />
+    <Teleport to="body">
+      <div
+        v-if="menus.fileContextMenuOpen"
+        ref="fileCtxMenuPanelRef"
+        data-fullscreen-sidebar-float
+        class="fileCtxMenu appShellMenuPanel"
+        :style="{
+          left: `${fileCtxMenuLeft}px`,
+          top: `${fileCtxMenuTop}px`,
+        }"
+        role="menu"
+        @click.stop
+      >
+        <div
+          class="appShellMenuSubWrap"
+          @mouseenter="
+            fileCtxCategorySubOpen = true;
+            void layoutFileCtxCategoryFlyoutInViewport();
+          "
+          @mouseleave="closeFileCtxCategorySub"
+        >
+          <button
+            type="button"
+            class="appShellMenuItem"
+            role="menuitem"
+            aria-haspopup="menu"
+            :aria-expanded="fileCtxCategorySubOpen"
+          >
+            <span class="appShellMenuLabel">分类</span>
+            <span class="appShellMenuSubChevron">›</span>
+          </button>
+          <div
+            v-show="fileCtxCategorySubOpen"
+            ref="fileCtxCategoryFlyoutRef"
+            class="appShellMenuFlyout fileCtxCategoryFlyout"
+            :class="
+              fileCtxFlyoutUseLeft
+                ? 'appShellMenuFlyout--left'
+                : 'appShellMenuFlyout--right'
+            "
+            :style="fileCtxFlyoutPanelStyle"
+            role="menu"
+            @click.stop
+          >
+            <FileCategoryFlyoutList
+              :catalog="fileCategoryCatalog"
+              :menu-counts="categoryMenuCounts"
+              @pick="onFileCtxCategoryPicked"
+            />
+          </div>
+        </div>
+        <button
+          type="button"
+          class="appShellMenuItem appShellMenuItem--danger"
+          role="menuitem"
+          @click="onFileCtxRemove"
+        >
+          移除
+        </button>
+        <button
+          v-if="menus.fileContextMenuWithCtrl"
+          type="button"
+          class="appShellMenuItem appShellMenuItem--danger"
+          role="menuitem"
+          @click="onFileCtxClearFileMeta"
+        >
+          清除该文件数据
+        </button>
+        <div class="appShellMenuDivider" role="separator" />
+        <button
+          type="button"
+          class="appShellMenuItem"
+          role="menuitem"
+          @click="onFileCtxRename"
+        >
+          重命名
+        </button>
+        <div class="appShellMenuDivider" role="separator" />
+        <button
+          type="button"
+          class="appShellMenuItem"
+          role="menuitem"
+          @click="onFileCtxOpenInNewWindow"
+        >
+          在新窗口中打开
+        </button>
+        <button
+          type="button"
+          class="appShellMenuItem"
+          role="menuitem"
+          @click="onFileCtxReveal"
+        >
+          在文件管理器中显示
+        </button>
+      </div>
+    </Teleport>
+    <Teleport to="body">
+      <div
+        v-if="menus.fileContextMenuOpen"
+        data-fullscreen-sidebar-float
+        class="fileCtxMenuBackdrop"
+        @pointerdown="closeFileContextMenuAll"
+      />
+    </Teleport>
     <Teleport to="body">
       <div
         v-if="menus.editContextMenuOpen"
@@ -649,46 +1065,11 @@ onBeforeUnmount(() => {
             role="menu"
             @click.stop
           >
-            <div class="appShellMenuFlyoutList">
-              <button
-                type="button"
-                class="appShellMenuFlyoutItem"
-                role="menuitem"
-                @click="menus.onEditMenuCategoryPicked('')"
-              >
-                <span class="appShellMenuItemRowBody">
-                  <span class="appShellMenuItemLabelWithCount">
-                    <span class="appShellMenuItemLabelText">未分类</span>
-                    <span class="appShellMenuItemSuffix"
-                      >({{ categoryMenuCounts.uncategorized }})</span
-                    >
-                  </span>
-                </span>
-              </button>
-              <div class="appShellMenuFlyoutDivider" role="separator" />
-              <button
-                v-for="(c, i) in fileCategoryCatalog"
-                :key="i"
-                type="button"
-                class="appShellMenuFlyoutItem"
-                role="menuitem"
-                @click="menus.onEditMenuCategoryPicked(c.name)"
-              >
-                <span
-                  class="appShellMenuItemMark"
-                  aria-hidden="true"
-                  :style="{ backgroundColor: c.color }"
-                />
-                <span class="appShellMenuItemRowBody">
-                  <span class="appShellMenuItemLabelWithCount">
-                    <span class="appShellMenuItemLabelText">{{ c.name }}</span>
-                    <span class="appShellMenuItemSuffix"
-                      >({{ categoryMenuCounts.byName[c.name] ?? 0 }})</span
-                    >
-                  </span>
-                </span>
-              </button>
-            </div>
+            <FileCategoryFlyoutList
+              :catalog="fileCategoryCatalog"
+              :menu-counts="categoryMenuCounts"
+              @pick="menus.onEditMenuCategoryPicked"
+            />
           </div>
         </div>
         <button
@@ -698,6 +1079,15 @@ onBeforeUnmount(() => {
           @click="menus.onEditMenuRemove"
         >
           移除
+        </button>
+        <div class="appShellMenuDivider" role="separator" />
+        <button
+          type="button"
+          class="appShellMenuItem"
+          role="menuitem"
+          @click="onEditCtxRename"
+        >
+          重命名
         </button>
         <div class="appShellMenuDivider" role="separator" />
         <button
@@ -902,6 +1292,10 @@ onBeforeUnmount(() => {
   width: 14px;
   height: 14px;
 }
+.fileItemRenameInput {
+  flex: 1;
+  min-width: 0;
+}
 .sidebarTabFooter {
   flex-shrink: 0;
   display: flex;
@@ -931,12 +1325,25 @@ onBeforeUnmount(() => {
   inset: 0;
   z-index: 6990;
 }
+.fileCtxMenuBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 6990;
+}
 .editCtxMenu {
   position: fixed;
   z-index: 7100;
   min-width: 100px;
 }
+.fileCtxMenu {
+  position: fixed;
+  z-index: 7100;
+  min-width: 160px;
+}
 .editCtxCategoryFlyout {
+  min-width: 140px;
+}
+.fileCtxCategoryFlyout {
   min-width: 140px;
 }
 </style>

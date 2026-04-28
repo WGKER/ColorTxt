@@ -92,6 +92,9 @@ const emit = defineEmits<{
   clearFileList: [];
   clearFileListCategory: [categoryFilter: string];
   removeFileList: [filePaths: string[]];
+  clearFileMeta: [path: string];
+  renameFilePath: [payload: { oldPath: string; newName: string }];
+  openFileInNewWindow: [path: string];
   closeCurrentFile: [];
   clearBookmarks: [];
   removeBookmarks: [lines: number[]];
@@ -361,6 +364,9 @@ defineExpose({
         @clear-file-list="emit('clearFileList')"
         @clear-file-list-category="emit('clearFileListCategory', $event)"
         @remove-file-list="emit('removeFileList', $event)"
+        @clear-file-meta="emit('clearFileMeta', $event)"
+        @rename-file-path="emit('renameFilePath', $event)"
+        @open-file-in-new-window="emit('openFileInNewWindow', $event)"
         @import-dropped-paths="emit('importDroppedPaths', $event)"
         @bind-list-ref="bindFileListRef"
         @update:fullscreen-file-list-popovers-open="

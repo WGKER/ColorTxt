@@ -15,6 +15,7 @@ import {
   open,
   readdir,
   readFile,
+  rename,
   realpath,
   rm,
   stat,
@@ -287,8 +288,12 @@ export function registerMainIpcHandlers(
     app.quit();
   });
 
-  ipcMain.on("window:new", () => {
-    createWindow({});
+  ipcMain.on("window:new", (_evt, openTxtPath?: unknown) => {
+    const targetPath =
+      typeof openTxtPath === "string" && openTxtPath.trim()
+        ? openTxtPath.trim()
+        : null;
+    createWindow({ openTxtPath: targetPath });
   });
 
   ipcMain.handle("window:toggleDevTools", (evt) => {
@@ -608,6 +613,37 @@ export function registerMainIpcHandlers(
     await mkdir(path.resolve(dirPath), { recursive: true });
     return { ok: true as const };
   });
+
+  ipcMain.handle(
+    "fs:renamePath",
+    async (_evt, fromPath: string, toPath: string) => {
+      const from = path.resolve(String(fromPath ?? ""));
+      const to = path.resolve(String(toPath ?? ""));
+      if (!from || !to) {
+        return {
+          ok: false as const,
+          message: "路径不能为空",
+          code: "EINVAL",
+        };
+      }
+      try {
+        await rename(from, to);
+        const st = await stat(to);
+        return {
+          ok: true as const,
+          path: to,
+          size: st.isFile() ? st.size : 0,
+        };
+      } catch (e) {
+        const err = e as NodeJS.ErrnoException;
+        return {
+          ok: false as const,
+          message: err?.message || "重命名失败",
+          code: err?.code ?? "UNKNOWN",
+        };
+      }
+    },
+  );
 
   ipcMain.handle("dir:listTxtFiles", async (evt, dirPath: string) => {
     const sender = evt.sender;

@@ -3,8 +3,9 @@ import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 
 type ContextMenuItem = {
   id: string;
-  label: string;
+  label?: string;
   type?: "primary" | "success" | "warning" | "danger";
+  separator?: boolean;
 };
 
 const props = defineProps<{
@@ -102,16 +103,22 @@ onBeforeUnmount(() => {
     }"
     @click.stop
   >
-    <button
-      v-for="item in items"
-      :key="item.id"
-      type="button"
-      :class="itemClass(item)"
-      role="menuitem"
-      @click="emit('select', item.id)"
-    >
-      {{ item.label }}
-    </button>
+    <template v-for="item in items" :key="item.id">
+      <div
+        v-if="item.separator"
+        class="appShellMenuDivider"
+        role="separator"
+      />
+      <button
+        v-else
+        type="button"
+        :class="itemClass(item)"
+        role="menuitem"
+        @click="emit('select', item.id)"
+      >
+        {{ item.label }}
+      </button>
+    </template>
   </div>
 </template>
 

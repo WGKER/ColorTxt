@@ -155,6 +155,7 @@ export function useAppPersistence(deps: {
   syncCurrentFile: Ref<boolean>;
 }) {
   const settingsLoaded = ref(false);
+  let storageSyncBound = false;
 
   /** 合并短时间内的 file.meta 写盘，避免换书 / 恢复 / 拖入打开时主线程长时间 JSON.stringify */
   const FILE_META_DISK_DEBOUNCE_MS = 420;
@@ -299,6 +300,38 @@ export function useAppPersistence(deps: {
       fileMetaKey,
     );
     rebuildMetaProgressMap();
+  }
+
+  /** 多窗口：其它窗口写 localStorage 后，本窗口按 key 增量重载内存态。 */
+  function onStorageSync(ev: StorageEvent) {
+    if (ev.storageArea !== window.localStorage) return;
+    if (ev.key === null) {
+      // clear()：按当前配置保留既有加载流程，做最小必要重载
+      loadRecentFiles();
+      loadFileMeta();
+      deps.txtFiles.value = loadTxtFileListSnapshot(window.localStorage, fileListKey);
+      return;
+    }
+    if (ev.key === fileListKey) {
+      deps.txtFiles.value = loadTxtFileListSnapshot(window.localStorage, fileListKey);
+      try {
+        lastPersistedTxtFilesJson = window.localStorage.getItem(fileListKey) ?? "";
+      } catch {
+        lastPersistedTxtFilesJson = "";
+      }
+      return;
+    }
+    if (ev.key === fileMetaKey) {
+      loadFileMeta();
+      return;
+    }
+    if (ev.key === recentFilesKey) {
+      loadRecentFiles();
+      return;
+    }
+    if (ev.key === persistKey) {
+      loadPersistedSettings();
+    }
   }
 
   /** 设置中的历史条数变更后：裁剪列表并写盘 */
@@ -797,6 +830,10 @@ export function useAppPersistence(deps: {
     }
     loadRecentFiles();
     loadFileMeta();
+    if (!storageSyncBound) {
+      window.addEventListener("storage", onStorageSync);
+      storageSyncBound = true;
+    }
   }
 
   return {
