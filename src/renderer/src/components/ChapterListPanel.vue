@@ -88,6 +88,7 @@ function onBindListRef(value: Element | ComponentPublicInstance | null) {
   min-height: 0;
   display: flex;
   flex-direction: column;
+  background: var(--bg);
 }
 .sidebarListViewportPad {
   flex: 1;

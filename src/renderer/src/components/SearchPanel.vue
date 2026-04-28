@@ -123,7 +123,7 @@ function buildSegmentsByRanges(text: string, ranges: SearchRange[]) {
 
 <template>
   <div class="searchPanelWrap">
-    <div class="searchToolbar">
+    <div v-if="props.currentFilePath" class="searchToolbar">
       <div class="searchInputRow">
         <input
           ref="searchInputRef"

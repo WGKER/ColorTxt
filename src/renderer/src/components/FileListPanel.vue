@@ -1150,6 +1150,7 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   outline: none;
+  background: var(--bg);
 }
 .fileToolbarRow {
   flex-shrink: 0;

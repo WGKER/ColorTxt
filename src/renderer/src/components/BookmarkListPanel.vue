@@ -158,6 +158,7 @@ function onContextMenuSelect(actionId: string) {
   min-height: 0;
   display: flex;
   flex-direction: column;
+  background: var(--bg);
 }
 .sidebarListViewportPad {
   flex: 1;
