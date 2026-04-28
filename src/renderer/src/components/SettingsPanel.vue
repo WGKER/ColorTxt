@@ -217,6 +217,7 @@ async function onClearCache() {
             <PathPickerInput
               v-model="draftEbookConvertOutputDir"
               is-directory
+              placeholder="源文件目录"
               aria-label="电子书转换缓存目录"
               class="settingsEbookPathPicker"
             />
