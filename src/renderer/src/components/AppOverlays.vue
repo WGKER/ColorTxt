@@ -25,6 +25,7 @@ const bookmarkNoteInputRef = inject(bookmarkNoteInputRefKey)!;
 
 const props = defineProps<{
   restoreSessionOnStartup: boolean;
+  syncCurrentFile: boolean;
   recentFilesHistoryLimit: number;
   fullscreenReaderWidthPercent: number;
   readerFontSize: number;
@@ -157,6 +158,7 @@ onBeforeUnmount(() => {
   <SettingsPanel
     v-model="showSettingsPanel"
     :restore-session-on-startup="restoreSessionOnStartup"
+    :sync-current-file="syncCurrentFile"
     :recent-files-history-limit="recentFilesHistoryLimit"
     :fullscreen-reader-width-percent="fullscreenReaderWidthPercent"
     :reader-font-size="readerFontSize"

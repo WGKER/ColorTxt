@@ -147,6 +147,8 @@ export function useAppPersistence(deps: {
   fileCategoryCatalog: Ref<FileCategoryDefinition[]>;
   /** 侧栏文件列表「编辑」模式：为 true 时跳过文件列表 localStorage 写入，退出并保存时由 App 再落盘 */
   fileListEditing: Ref<boolean>;
+  /** 监控当前打开文件，磁盘变更后自动重新加载 */
+  syncCurrentFile: Ref<boolean>;
 }) {
   const settingsLoaded = ref(false);
 
@@ -569,6 +571,10 @@ export function useAppPersistence(deps: {
       deps.restoreSessionOnStartup.value = data.restoreSessionOnStartup;
     }
 
+    if (typeof data.syncCurrentFile === "boolean") {
+      deps.syncCurrentFile.value = data.syncCurrentFile;
+    }
+
     if (
       typeof data.recentFilesHistoryLimit === "number" &&
       Number.isFinite(data.recentFilesHistoryLimit)
@@ -682,6 +688,7 @@ export function useAppPersistence(deps: {
       showChapterCounts: deps.showChapterCounts.value,
       chapterRules: deps.chapterRuleState.value.rules,
       restoreSessionOnStartup: deps.restoreSessionOnStartup.value,
+      syncCurrentFile: deps.syncCurrentFile.value,
       recentFilesHistoryLimit: recentLimit(),
       monacoAdvancedWrapping: deps.monacoAdvancedWrapping.value,
       monacoSmoothScrolling: deps.monacoSmoothScrolling.value,

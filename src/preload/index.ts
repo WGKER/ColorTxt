@@ -171,6 +171,17 @@ const api = {
       physicalPath: filePath,
       sessionFilePath: options?.sessionFilePath,
     }),
+  /** 由主进程 `fs.watch` 监控磁盘文件；传 `null` 停止 */
+  watchCurrentFile: (filePath: string | null) =>
+    ipcRenderer.invoke("file:watchCurrent", filePath) as Promise<void>,
+  onCurrentFileDiskChanged: (
+    cb: (payload: { path: string; mtimeMs: number }) => void,
+  ) => {
+    const fn = (_: unknown, payload: { path: string; mtimeMs: number }) =>
+      cb(payload);
+    ipcRenderer.on("file:disk-changed", fn);
+    return () => ipcRenderer.off("file:disk-changed", fn);
+  },
   setWindowTitle: (title: string) => ipcRenderer.send("window:setTitle", title),
   setFullscreen: (value: boolean) =>
     ipcRenderer.invoke("window:setFullscreen", value) as Promise<boolean>,

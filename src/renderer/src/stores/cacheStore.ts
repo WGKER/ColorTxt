@@ -69,6 +69,8 @@ export type PersistedSettingsData = {
   fileSort?: FileSortMode;
   /** 用户维护的分类名称与颜色表 */
   fileCategoryCatalog?: FileCategoryDefinition[];
+  /** 监控当前打开文件，磁盘变更后自动重新加载 */
+  syncCurrentFile?: boolean;
 };
 
 export type PersistedSettingsLoadResult = {
@@ -225,6 +227,9 @@ export function loadPersistedSettingsData(
   }
   const catalog = parseFileCategoryCatalog(obj.fileCategoryCatalog);
   if (catalog) data.fileCategoryCatalog = catalog;
+  if (typeof obj.syncCurrentFile === "boolean") {
+    data.syncCurrentFile = obj.syncCurrentFile;
+  }
   return { data, ebookConvertOutputDirKeyPresent };
 }
 

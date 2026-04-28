@@ -22,6 +22,8 @@ import {
 
 export type SettingsApplyPayload = {
   restoreSessionOnStartup: boolean;
+  /** 监控当前打开文件，磁盘变更后自动重新加载 */
+  syncCurrentFile: boolean;
   recentFilesHistoryLimit: number;
   fullscreenReaderWidthPercent: number;
   /** Monaco 阅读区平滑滚动 */
@@ -40,6 +42,7 @@ const modelValue = defineModel<boolean>({ default: false });
 
 const props = defineProps<{
   restoreSessionOnStartup: boolean;
+  syncCurrentFile: boolean;
   recentFilesHistoryLimit: number;
   fullscreenReaderWidthPercent: number;
   readerFontSize: number;
@@ -56,6 +59,7 @@ const emit = defineEmits<{
 }>();
 
 const draftRestore = ref(true);
+const draftSyncCurrentFile = ref(false);
 const draftRecentLimit = ref(20);
 const draftFullscreenReaderWidthPercent = ref(50);
 const draftFontSize = ref(14);
@@ -72,6 +76,7 @@ const draftMaxLineHeightMultiple = computed(() =>
 watch(modelValue, (open) => {
   if (!open) return;
   draftRestore.value = props.restoreSessionOnStartup;
+  draftSyncCurrentFile.value = props.syncCurrentFile;
   draftRecentLimit.value = props.recentFilesHistoryLimit;
   draftFullscreenReaderWidthPercent.value = props.fullscreenReaderWidthPercent;
   draftFontSize.value = props.readerFontSize;
@@ -99,6 +104,7 @@ function onCancel() {
 function onConfirm() {
   emit("apply", {
     restoreSessionOnStartup: draftRestore.value,
+    syncCurrentFile: draftSyncCurrentFile.value,
     recentFilesHistoryLimit: draftRecentLimit.value,
     fullscreenReaderWidthPercent: draftFullscreenReaderWidthPercent.value,
     monacoSmoothScrolling: draftMonacoSmoothScrolling.value,
@@ -164,6 +170,19 @@ async function onClearCache() {
         </div>
         <p class="settingsHint">
           关闭后，退出应用时不再保存当前阅读会话（打开的文件及阅读位置）。
+        </p>
+      </div>
+
+      <div class="settingsRow">
+        <div class="settingsRowMain">
+          <span class="settingsLabel">同步当前文件</span>
+          <SwitchToggle
+            v-model="draftSyncCurrentFile"
+            aria-label="同步当前文件"
+          />
+        </div>
+        <p class="settingsHint">
+          开启后，如果当前正在阅读的文件被修改，将自动重新加载。
         </p>
       </div>
 

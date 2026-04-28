@@ -20,6 +20,7 @@ import { useAppReaderChrome } from "./composables/useAppReaderChrome";
 import { useAppReadingProgress } from "./composables/useAppReadingProgress";
 import { useAppReaderUiPrefs } from "./composables/useAppReaderUiPrefs";
 import { useAppShellThemeWatch } from "./composables/useAppShellThemeWatch";
+import { useAppSyncCurrentFileWatch } from "./composables/useAppSyncCurrentFileWatch";
 import { useAppWindowBindings } from "./composables/useAppWindowBindings";
 import { useTxtStreamPipeline } from "./composables/useTxtStreamPipeline";
 import { fileHistoryKey } from "./stores/recentHistoryStore";
@@ -49,6 +50,7 @@ import {
   mergeReaderSurfacePalette,
   overridesFromFullPalette,
   defaultRestoreSessionOnStartup,
+  defaultSyncCurrentFile,
   defaultTxtrDelimitedMatchCrossLine,
   defaultShowChapterCounts,
   defaultShowSidebar,
@@ -252,6 +254,8 @@ const shortcutBindings = ref<ShortcutBindingMap>({
 
 /** 启动时是否恢复上次会话快照（localStorage）；关闭时不写入会话 */
 const restoreSessionOnStartup = ref(defaultRestoreSessionOnStartup);
+/** 磁盘上当前正文变更后是否自动重新加载（设置项） */
+const syncCurrentFile = ref(defaultSyncCurrentFile);
 /** 最近打开文件条数上限，0 表示不记录 */
 const recentFilesHistoryLimit = ref(defaultRecentFilesHistoryLimit);
 /** Monaco wrappingStrategy：advanced 换行更优、更重 */
@@ -427,6 +431,7 @@ const persistence = useAppPersistence({
   fileSort,
   fileCategoryCatalog,
   fileListEditing,
+  syncCurrentFile,
 });
 const {
   persistSettings,
@@ -657,6 +662,18 @@ const {
   openRecentFileFromHistory,
 } = fileSession;
 
+useAppSyncCurrentFileWatch({
+  syncCurrentFile,
+  physicalReaderPath,
+  currentFile,
+  loading,
+  readingProgressSynced,
+  ebookParsing,
+  stream,
+  viewportEndLine,
+  openFilePath,
+});
+
 async function onImportDroppedPathsFromList(paths: string[]) {
   readerDropOverlayVisible.value = false;
   await importPathsIntoFileList(paths);
@@ -857,6 +874,7 @@ function applySettings(payload: SettingsApplyPayload) {
   compressBlankKeepOneBlank.value = payload.compressBlankKeepOneBlank;
   txtrDelimitedMatchCrossLine.value = payload.txtrDelimitedMatchCrossLine;
   restoreSessionOnStartup.value = payload.restoreSessionOnStartup;
+  syncCurrentFile.value = payload.syncCurrentFile;
   recentFilesHistoryLimit.value = Math.max(
     0,
     Math.min(
@@ -1272,6 +1290,7 @@ useAppShellThemeWatch({
       v-model:remove-bookmark-open="removeBookmarkOpen"
       v-model:bookmark-note-input="bookmarkNoteInput"
       :restore-session-on-startup="restoreSessionOnStartup"
+      :sync-current-file="syncCurrentFile"
       :recent-files-history-limit="recentFilesHistoryLimit"
       :fullscreen-reader-width-percent="fullscreenReaderWidthPercent"
       :reader-font-size="readerFontSize"

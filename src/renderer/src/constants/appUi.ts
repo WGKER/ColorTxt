@@ -95,6 +95,8 @@ export const defaultShowChapterCounts = true;
 export const defaultReaderFontSize = 24;
 export const defaultReaderLineHeightMultiple = 1.5;
 export const defaultRestoreSessionOnStartup = true;
+/** 是否监控当前打开文件并在磁盘变更后自动重新加载（默认关闭） */
+export const defaultSyncCurrentFile = false;
 export const defaultMonacoAdvancedWrapping = false;
 /** Monaco 阅读区：滚轮/跳转等是否使用平滑滚动动画 */
 export const defaultMonacoSmoothScrolling = true;

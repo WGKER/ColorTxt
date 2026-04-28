@@ -6,8 +6,10 @@ import {
   nativeTheme,
   shell,
   type MessageBoxOptions,
+  type WebContents,
 } from "electron";
-import { createReadStream } from "node:fs";
+import { createReadStream, watch as fsWatchFile } from "node:fs";
+import type { FSWatcher } from "node:fs";
 import {
   mkdir,
   open,
@@ -168,6 +170,110 @@ export function registerMainIpcHandlers(
     ReturnType<typeof createReadStream>
   >();
   const streamRequestSeqBySenderId = new Map<number, number>();
+
+  type CurrentFileWatchEntry = {
+    watcher: FSWatcher;
+    lastMtimeMs: number;
+    debounceTimer: ReturnType<typeof setTimeout> | null;
+  };
+  const currentFileWatchBySenderId = new Map<number, CurrentFileWatchEntry>();
+  const currentFileWatchDestroyHooked = new WeakSet<WebContents>();
+
+  function stopCurrentFileWatch(senderId: number) {
+    const entry = currentFileWatchBySenderId.get(senderId);
+    if (!entry) return;
+    if (entry.debounceTimer != null) {
+      clearTimeout(entry.debounceTimer);
+      entry.debounceTimer = null;
+    }
+    try {
+      entry.watcher.close();
+    } catch {
+      // ignore
+    }
+    currentFileWatchBySenderId.delete(senderId);
+  }
+
+  ipcMain.removeHandler("file:watchCurrent");
+  ipcMain.handle("file:watchCurrent", async (evt, rawPath: unknown) => {
+    const sender = evt.sender;
+    const senderId = sender.id;
+    stopCurrentFileWatch(senderId);
+
+    if (rawPath === null || rawPath === undefined) {
+      return;
+    }
+    if (typeof rawPath !== "string") {
+      return;
+    }
+    const trimmed = rawPath.trim();
+    if (!trimmed) {
+      return;
+    }
+
+    let st;
+    try {
+      st = await stat(trimmed);
+    } catch {
+      return;
+    }
+    if (!st.isFile()) {
+      return;
+    }
+
+    const entry: CurrentFileWatchEntry = {
+      watcher: null as unknown as FSWatcher,
+      lastMtimeMs: st.mtimeMs,
+      debounceTimer: null,
+    };
+
+    const flushChange = async () => {
+      entry.debounceTimer = null;
+      if (sender.isDestroyed()) {
+        stopCurrentFileWatch(senderId);
+        return;
+      }
+      try {
+        const st2 = await stat(trimmed);
+        if (!st2.isFile()) return;
+        if (st2.mtimeMs <= entry.lastMtimeMs + 0.5) return;
+        entry.lastMtimeMs = st2.mtimeMs;
+        if (sender.isDestroyed()) {
+          stopCurrentFileWatch(senderId);
+          return;
+        }
+        sender.send("file:disk-changed", {
+          path: trimmed,
+          mtimeMs: st2.mtimeMs,
+        });
+      } catch {
+        // ignore
+      }
+    };
+
+    const scheduleFlush = () => {
+      if (entry.debounceTimer != null) clearTimeout(entry.debounceTimer);
+      entry.debounceTimer = setTimeout(() => {
+        void flushChange();
+      }, 280);
+    };
+
+    let watcher: FSWatcher;
+    try {
+      watcher = fsWatchFile(trimmed, scheduleFlush);
+    } catch {
+      return;
+    }
+    entry.watcher = watcher;
+    currentFileWatchBySenderId.set(senderId, entry);
+
+    if (!currentFileWatchDestroyHooked.has(sender)) {
+      currentFileWatchDestroyHooked.add(sender);
+      sender.once("destroyed", () => {
+        stopCurrentFileWatch(sender.id);
+      });
+    }
+  });
 
   ipcMain.handle("shell:openExternal", async (_evt, url: string) => {
     await shell.openExternal(url);
