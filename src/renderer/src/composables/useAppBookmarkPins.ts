@@ -15,6 +15,8 @@ type TxtStreamPipeline = ReturnType<
 export function useAppBookmarkPins(deps: {
   readerRef: ReaderRef;
   stream: TxtStreamPipeline;
+  /** 为 true 时 Monaco 与磁盘物理行一一对应，跳转/视口书签判定勿走滤空映射 */
+  readerEditMode: Ref<boolean>;
   currentFile: Ref<string | null>;
   loading: Ref<boolean>;
   totalLineCount: Ref<number>;
@@ -65,20 +67,23 @@ export function useAppBookmarkPins(deps: {
     );
   });
 
-  const viewportTopPhysicalLine = computed(() =>
-    deps.stream.viewportDisplayLineToPhysicalLine(
-      (() => {
-        const probeTick = deps.lastProbeLine.value;
-        const top = deps.readerRef.value?.getViewportTopLine?.();
-        return typeof top === "number" && Number.isFinite(top)
-          ? top
-          : probeTick;
-      })(),
-    ),
-  );
-  const viewportBottomPhysicalLine = computed(() =>
-    deps.stream.viewportDisplayLineToPhysicalLine(deps.viewportEndLine.value),
-  );
+  const viewportTopPhysicalLine = computed(() => {
+    const probeTick = deps.lastProbeLine.value;
+    const top = deps.readerRef.value?.getViewportTopLine?.();
+    const displayTop =
+      typeof top === "number" && Number.isFinite(top) ? top : probeTick;
+    if (deps.readerEditMode.value) {
+      return Math.max(1, Math.floor(displayTop));
+    }
+    return deps.stream.viewportDisplayLineToPhysicalLine(displayTop);
+  });
+  const viewportBottomPhysicalLine = computed(() => {
+    const end = deps.viewportEndLine.value;
+    if (deps.readerEditMode.value) {
+      return Math.max(1, Math.floor(end));
+    }
+    return deps.stream.viewportDisplayLineToPhysicalLine(end);
+  });
 
   const activeBookmarkInViewport = computed<FileBookmarkItem | null>(() => {
     const top = Math.min(
@@ -189,7 +194,9 @@ export function useAppBookmarkPins(deps: {
   }
 
   function jumpToBookmark(line: number) {
-    const displayLine = deps.stream.physicalLineToDisplayForReader(line);
+    const displayLine = deps.readerEditMode.value
+      ? Math.max(1, Math.floor(line))
+      : deps.stream.physicalLineToDisplayForReader(line);
     deps.readerRef.value?.jumpToBookmarkLine(displayLine);
     queueMicrotask(() => deps.readerRef.value?.emitProbeLine?.());
   }

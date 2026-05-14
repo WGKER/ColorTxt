@@ -918,6 +918,7 @@ const {
 } = useAppBookmarkPins({
   readerRef,
   stream,
+  readerEditMode,
   currentFile,
   loading,
   totalLineCount,
@@ -1447,7 +1448,9 @@ function runSidebarSearch(token: number) {
     if (ranges.length === 0) continue;
     next.push({
       physicalLine: line,
-      displayLine: stream.physicalLineToDisplayForReader(line),
+      displayLine: readerEditMode.value
+        ? line
+        : stream.physicalLineToDisplayForReader(line),
       text,
       ranges,
     });
@@ -1505,6 +1508,11 @@ watch(totalLineCount, () => {
   scheduleSidebarSearch();
 });
 
+watch(readerEditMode, () => {
+  if (!searchQuery.value.trim()) return;
+  scheduleSidebarSearch();
+});
+
 watch(currentFile, (next, prev) => {
   if (next === prev) return;
   clearSidebarSearchState();
@@ -1514,7 +1522,9 @@ function onJumpToSearchResult(item: SidebarSearchResult) {
   if (!currentFile.value || loading.value || totalLineCount.value <= 0) return;
   activeSearchResultPhysicalLine.value = item.physicalLine;
   ensurePinBeforeRevealFindWidget();
-  const displayLine = stream.physicalLineToDisplayForReader(item.physicalLine);
+  const displayLine = readerEditMode.value
+    ? item.physicalLine
+    : stream.physicalLineToDisplayForReader(item.physicalLine);
   const primaryRange = item.ranges[0];
   const startColumn = primaryRange ? primaryRange.start + 1 : 1;
   const endColumn = primaryRange

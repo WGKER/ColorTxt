@@ -329,7 +329,7 @@ src/
 
 ###### `composables/`
 
-- **`useAppBookmarkPins.ts`**：书钉与书签：列表项、视口内活动书签、添加/移除/跳转及书签弹窗交互。
+- **`useAppBookmarkPins.ts`**：书钉与书签：列表项、视口内活动书签、添加/移除/跳转及书签弹窗交互；**`readerEditMode`** 下书签跳转与视口判定按物理行 = Monaco 行（不经滤空映射）。
 - **`useAppChapterListSync.ts`**：侧栏章节/文件列表「滚到当前」的一拍状态（与 VirtualList 配合）。
 - **`useAppChapterNavigation.ts`**：章节跳转、章节规则与最近文件、侧栏标签等联动；应用章节规则后重载当前文件时以视口末行恢复阅读位置（与 `useAppReaderUiPrefs` 切换排版一致）。
 - **`useAppFileSession.ts`**：打开文件/选目录、会话快照恢复、与流管道和持久化衔接；`resetSession` 置 `readingProgressSynced` 为 `false`；导入目录合并列表时若当前分类筛选为具体分类名，会把新项写上对应 `category`（「全部 / 未分类」筛选下不写）。
@@ -793,6 +793,7 @@ src/
 ### 章节与侧栏
 
 - 进入编辑并成功载入后 **`applyChaptersFromReaderPlainText`**（`chapter.ts` **`buildChaptersFromPlainText`**）从全文重算 **`chapters`**；编辑态下 **`setChapters`** 一般不挂章节标题行内装饰（避免与编辑行混淆）。侧栏章节列表头部可提供**刷新章节**以在编辑中手动重算。
+- **书签与侧栏搜索**：`meta` 中书签字段与搜索结果均以**源物理行**为键。只读且开启压缩空行时，跳转需 `physicalLineToDisplayForReader` 等映射；**编辑态**下 Monaco 与磁盘一一对应，**`useAppBookmarkPins`**（视口内活动书签判定、`jumpToBookmark`）与 **`App.vue`** 的侧栏搜索（`runSidebarSearch` / **`onJumpToSearchResult`**）在 **`readerEditMode`** 为 true 时按**未压缩**语义使用行号（物理行即 Monaco 行）；切换编辑/只读且侧栏有搜索词时会 **`watch(readerEditMode)`** 触发一次 **`scheduleSidebarSearch`** 以刷新结果中的展示行号。
 
 ### 同步当前文件与主进程 IPC
 
