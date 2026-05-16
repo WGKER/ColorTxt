@@ -1,6 +1,6 @@
 <h1>
   <p align="center">
-    <img src="./resources/icon.png" width="32"> 彩读｜ColorTxt
+    <img src="./resources/icon.png" width="32"> 彩读｜ColorTxt 2.0 <span style="color: orange">AI+</span>
   </p>
 </h1>
 
