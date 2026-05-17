@@ -149,6 +149,7 @@ export function useAppPersistence(deps: {
   chapterMinCharCount: Ref<number>;
   monacoAdvancedWrapping: Ref<boolean>;
   monacoSmoothScrolling: Ref<boolean>;
+  readerEditShowLineNumbers: Ref<boolean>;
   fullscreenReaderWidthPercent: Ref<number>;
   fileMetaRecords: Ref<FileMetaRecord[]>;
   shortcutBindings: Ref<ShortcutBindingMap>;
@@ -693,6 +694,9 @@ export function useAppPersistence(deps: {
     if (typeof data.monacoSmoothScrolling === "boolean") {
       deps.monacoSmoothScrolling.value = data.monacoSmoothScrolling;
     }
+    if (typeof data.readerEditShowLineNumbers === "boolean") {
+      deps.readerEditShowLineNumbers.value = data.readerEditShowLineNumbers;
+    }
     if (
       typeof data.fullscreenReaderWidthPercent === "number" &&
       Number.isFinite(data.fullscreenReaderWidthPercent)
@@ -820,6 +824,7 @@ export function useAppPersistence(deps: {
       chapterMinCharCount: deps.chapterMinCharCount.value,
       monacoAdvancedWrapping: deps.monacoAdvancedWrapping.value,
       monacoSmoothScrolling: deps.monacoSmoothScrolling.value,
+      readerEditShowLineNumbers: deps.readerEditShowLineNumbers.value,
       fullscreenReaderWidthPercent: deps.fullscreenReaderWidthPercent.value,
       shortcutBindings: deps.shortcutBindings.value,
       readerPaletteOverridesLight:

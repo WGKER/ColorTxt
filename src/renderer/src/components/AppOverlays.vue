@@ -34,6 +34,7 @@ const props = defineProps<{
   readerFontSize: number;
   readerLineHeightMultiple: number;
   monacoSmoothScrolling: boolean;
+  readerEditShowLineNumbers: boolean;
   compressBlankKeepOneBlank: boolean;
   monacoCustomHighlight: boolean;
   txtrDelimitedMatchCrossLine: boolean;
@@ -181,6 +182,7 @@ onBeforeUnmount(() => {
     :reader-font-size="readerFontSize"
     :reader-line-height-multiple="readerLineHeightMultiple"
     :monaco-smooth-scrolling="monacoSmoothScrolling"
+    :reader-edit-show-line-numbers="readerEditShowLineNumbers"
     :compress-blank-keep-one-blank="compressBlankKeepOneBlank"
     :monaco-custom-highlight="monacoCustomHighlight"
     :txtr-delimited-match-cross-line="txtrDelimitedMatchCrossLine"

@@ -23,6 +23,7 @@ import {
   defaultCompressBlankKeepOneBlank,
   defaultFullscreenReaderWidthPercent,
   defaultMonacoSmoothScrolling,
+  defaultReaderEditShowLineNumbers,
   defaultReaderFontSize,
   defaultReaderLineHeightMultiple,
   defaultRecentFilesHistoryLimit,
@@ -54,6 +55,7 @@ export type SettingsApplyPayload = {
   chapterMinCharCount: number;
   fullscreenReaderWidthPercent: number;
   monacoSmoothScrolling: boolean;
+  readerEditShowLineNumbers: boolean;
   fontSize: number;
   lineHeightMultiple: number;
   compressBlankKeepOneBlank: boolean;
@@ -77,6 +79,7 @@ const props = defineProps<{
   readerFontSize: number;
   readerLineHeightMultiple: number;
   monacoSmoothScrolling: boolean;
+  readerEditShowLineNumbers: boolean;
   compressBlankKeepOneBlank: boolean;
   monacoCustomHighlight: boolean;
   txtrDelimitedMatchCrossLine: boolean;
@@ -113,6 +116,7 @@ const draftFullscreenReaderWidthPercent = ref(50);
 const draftFontSize = ref(14);
 const draftLineHeightMultiple = ref(1.5);
 const draftMonacoSmoothScrolling = ref(true);
+const draftReaderEditShowLineNumbers = ref(defaultReaderEditShowLineNumbers);
 const draftCompressBlankKeepOneBlank = ref(false);
 const draftTxtrDelimitedMatchCrossLine = ref(
   defaultTxtrDelimitedMatchCrossLine,
@@ -147,6 +151,7 @@ function syncDraftFromProps() {
     props.readerLineHeightMultiple,
   );
   draftMonacoSmoothScrolling.value = props.monacoSmoothScrolling;
+  draftReaderEditShowLineNumbers.value = props.readerEditShowLineNumbers;
   draftCompressBlankKeepOneBlank.value = props.compressBlankKeepOneBlank;
   draftTxtrDelimitedMatchCrossLine.value = props.txtrDelimitedMatchCrossLine;
   draftEbookConvertOutputDir.value = props.ebookConvertOutputDir;
@@ -223,6 +228,7 @@ function resetReadingDraft() {
     defaultReaderLineHeightMultiple,
   );
   draftMonacoSmoothScrolling.value = defaultMonacoSmoothScrolling;
+  draftReaderEditShowLineNumbers.value = defaultReaderEditShowLineNumbers;
   draftCompressBlankKeepOneBlank.value = defaultCompressBlankKeepOneBlank;
   draftTxtrDelimitedMatchCrossLine.value = defaultTxtrDelimitedMatchCrossLine;
   draftFullscreenReaderWidthPercent.value = defaultFullscreenReaderWidthPercent;
@@ -321,6 +327,7 @@ async function onConfirm() {
     chapterMinCharCount: draftChapterMinCharCount.value,
     fullscreenReaderWidthPercent: draftFullscreenReaderWidthPercent.value,
     monacoSmoothScrolling: draftMonacoSmoothScrolling.value,
+    readerEditShowLineNumbers: draftReaderEditShowLineNumbers.value,
     fontSize: draftFontSize.value,
     lineHeightMultiple: draftLineHeightMultiple.value,
     compressBlankKeepOneBlank: draftCompressBlankKeepOneBlank.value,
@@ -402,6 +409,9 @@ async function onClearCache() {
               v-model:draft-font-size="draftFontSize"
               v-model:draft-line-height-multiple="draftLineHeightMultiple"
               v-model:draft-monaco-smooth-scrolling="draftMonacoSmoothScrolling"
+              v-model:draft-reader-edit-show-line-numbers="
+                draftReaderEditShowLineNumbers
+              "
               v-model:draft-compress-blank-keep-one-blank="
                 draftCompressBlankKeepOneBlank
               "

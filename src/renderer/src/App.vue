@@ -69,6 +69,7 @@ import {
   defaultMonacoAdvancedWrapping,
   defaultMonacoCustomHighlight,
   defaultMonacoSmoothScrolling,
+  defaultReaderEditShowLineNumbers,
   defaultReaderIdleHint,
   defaultReaderOpenHint,
   defaultReaderFontSize,
@@ -397,6 +398,7 @@ const chapterMinCharCount = ref(defaultChapterMinCharCount);
 const monacoAdvancedWrapping = ref(defaultMonacoAdvancedWrapping);
 /** Monaco 阅读区平滑滚动（设置可关） */
 const monacoSmoothScrolling = ref(defaultMonacoSmoothScrolling);
+const readerEditShowLineNumbers = ref(defaultReaderEditShowLineNumbers);
 /** 全屏时阅读区域宽度（百分比） */
 const fullscreenReaderWidthPercent = ref(defaultFullscreenReaderWidthPercent);
 /** 电子书转换缓存目录；默认 userData/ConvertedTxt；设置里清空则为与源文件同目录 */
@@ -723,6 +725,7 @@ const persistence = useAppPersistence({
   chapterMinCharCount,
   monacoAdvancedWrapping,
   monacoSmoothScrolling,
+  readerEditShowLineNumbers,
   fullscreenReaderWidthPercent,
   fileMetaRecords,
   shortcutBindings,
@@ -1787,6 +1790,7 @@ async function applySettings(payload: SettingsApplyPayload) {
   const prevCompressBlankKeepOneBlank = compressBlankKeepOneBlank.value;
   const prevChapterMinCharCount = chapterMinCharCount.value;
   monacoSmoothScrolling.value = payload.monacoSmoothScrolling;
+  readerEditShowLineNumbers.value = payload.readerEditShowLineNumbers;
   compressBlankKeepOneBlank.value = payload.compressBlankKeepOneBlank;
   txtrDelimitedMatchCrossLine.value = payload.txtrDelimitedMatchCrossLine;
   restoreSessionOnStartup.value = payload.restoreSessionOnStartup;
@@ -2238,6 +2242,7 @@ useAppShellThemeWatch({
           :chapter-min-char-count="chapterMinCharCount"
           :monaco-advanced-wrapping="monacoAdvancedWrapping"
           :monaco-smooth-scrolling="monacoSmoothScrolling"
+          :reader-edit-show-line-numbers="readerEditShowLineNumbers"
           :stream-loading="loading"
           :reader-surface-light="readerSurfaceLight"
           :reader-surface-dark="readerSurfaceDark"
@@ -2369,6 +2374,7 @@ useAppShellThemeWatch({
       :reader-line-height-multiple="readerLineHeightMultiple"
       :compress-blank-keep-one-blank="compressBlankKeepOneBlank"
       :monaco-smooth-scrolling="monacoSmoothScrolling"
+      :reader-edit-show-line-numbers="readerEditShowLineNumbers"
       :monaco-custom-highlight="monacoCustomHighlight"
       :txtr-delimited-match-cross-line="txtrDelimitedMatchCrossLine"
       :chapter-rules="chapterRuleState.rules"

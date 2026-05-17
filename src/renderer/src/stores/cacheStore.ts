@@ -59,6 +59,8 @@ export type PersistedSettingsData = {
   monacoAdvancedWrapping?: boolean;
   /** Monaco 阅读区平滑滚动（滚轮、程序性 setScrollTop/revealLine 等） */
   monacoSmoothScrolling?: boolean;
+  /** 编辑模式下是否显示行号 */
+  readerEditShowLineNumbers?: boolean;
   /** 全屏时阅读区宽度（百分比） */
   fullscreenReaderWidthPercent?: number;
   /** 用户自定义快捷键（动作ID -> accelerator） */
@@ -225,6 +227,9 @@ export function loadPersistedSettingsData(
   }
   if (typeof obj.monacoSmoothScrolling === "boolean") {
     data.monacoSmoothScrolling = obj.monacoSmoothScrolling;
+  }
+  if (typeof obj.readerEditShowLineNumbers === "boolean") {
+    data.readerEditShowLineNumbers = obj.readerEditShowLineNumbers;
   }
   if (
     typeof obj.fullscreenReaderWidthPercent === "number" &&

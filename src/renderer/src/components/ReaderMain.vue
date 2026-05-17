@@ -65,6 +65,7 @@ import {
   defaultMonacoAdvancedWrapping,
   defaultMonacoCustomHighlight,
   defaultMonacoSmoothScrolling,
+  defaultReaderEditShowLineNumbers,
   defaultTxtrDelimitedMatchCrossLine,
   defaultReaderLineHeightMultiple,
   defaultReaderPaletteDark,
@@ -173,6 +174,8 @@ const props = withDefaults(
     monacoAdvancedWrapping?: boolean;
     /** Monaco 平滑滚动（滚轮、revealLine、setScrollTop 等） */
     monacoSmoothScrolling?: boolean;
+    /** 编辑模式下是否显示行号（只读模式始终关闭） */
+    readerEditShowLineNumbers?: boolean;
     /** 主进程流式读盘期间为 true；关闭 sticky 避免旧文件黏性标题在加载全程残留 */
     streamLoading?: boolean;
     /** 合并用户覆盖后的阅读器表面色（亮色 / 暗色） */
@@ -216,6 +219,7 @@ const props = withDefaults(
     compressBlankLines: defaultCompressBlankLines,
     monacoAdvancedWrapping: defaultMonacoAdvancedWrapping,
     monacoSmoothScrolling: defaultMonacoSmoothScrolling,
+    readerEditShowLineNumbers: defaultReaderEditShowLineNumbers,
     streamLoading: false,
     readerSurfaceLight: () => ({ ...defaultReaderPaletteLight }),
     readerSurfaceDark: () => ({ ...defaultReaderPaletteDark }),
@@ -287,7 +291,9 @@ function sealReaderEditBaseline() {
 
 /** 只读 / 编辑：切换 Monaco「阅读优化 chrome」与原生编辑 chrome（字体与配色仍走共享逻辑） */
 function applyReaderMonacoModeOptions(editMode: boolean) {
-  editor.value?.updateOptions(buildReaderMonacoModeEditorOptions(editMode));
+  editor.value?.updateOptions(
+    buildReaderMonacoModeEditorOptions(editMode, props.readerEditShowLineNumbers),
+  );
 }
 
 async function loadReaderEditFromDisk() {
@@ -756,6 +762,14 @@ watch(
   () => props.monacoSmoothScrolling,
   (on) => {
     editor.value?.updateOptions({ smoothScrolling: on });
+  },
+);
+
+watch(
+  () => [props.readerEditShowLineNumbers, props.readerEditMode] as const,
+  () => {
+    if (!editor.value) return;
+    applyReaderMonacoModeOptions(Boolean(props.readerEditMode));
   },
 );
 

@@ -209,18 +209,32 @@ export function buildReaderEditorEditableInteractionOptions(): Pick<
  * 按当前是否编辑模式，合并「交互（只读/可写）」与「模式专属 chrome」。
  * 调用方在切换阅读/编辑或创建编辑器后应执行一次 `editor.updateOptions(...)`。
  */
+export function buildReaderEditModeLineNumberOptions(
+  showLineNumbers: boolean,
+): Pick<editor.IEditorOptions, "lineNumbers" | "lineNumbersMinChars"> {
+  return showLineNumbers
+    ? { lineNumbers: "on", lineNumbersMinChars: 3 }
+    : { lineNumbers: "off", lineNumbersMinChars: 0 };
+}
+
 export function buildReaderMonacoModeEditorOptions(
   editMode: boolean,
+  editShowLineNumbers = false,
 ): ReaderMonacoConfigurableOptions {
+  const lineNumberOptions = buildReaderEditModeLineNumberOptions(
+    editMode && editShowLineNumbers,
+  );
   if (editMode) {
     return {
       ...buildReaderEditorEditModeNativeChromeOptions(),
       ...buildReaderEditorEditableInteractionOptions(),
+      ...lineNumberOptions,
     };
   }
   return {
     ...buildReaderEditorReadOnlyModeChromeOptions(),
     ...buildReaderEditorReadOnlyInteractionOptions(),
+    ...lineNumberOptions,
   };
 }
 
