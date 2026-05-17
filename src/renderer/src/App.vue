@@ -594,13 +594,24 @@ function encodingLabelForFooter(ipcEncoding: string): string {
   return ipcEncoding.trim().toUpperCase() || "-";
 }
 
+/** 写入磁盘：编辑模式用 Monaco 全文；只读且开压缩空行/行首缩进时用流管道物理行原文 */
+function textForReaderDiskSave(): string {
+  if (readerEditMode.value) {
+    return readerRef.value?.getAllText() ?? "";
+  }
+  if (compressBlankLines.value || leadIndentFullWidth.value) {
+    return stream.getPhysicalFilePlainText();
+  }
+  return readerRef.value?.getAllText() ?? "";
+}
+
 async function saveReaderBufferWithIpcEncoding(
   ipcEncoding: string,
 ): Promise<boolean> {
   const normalized = normalizeIpcEncoding(ipcEncoding);
   const p = physicalReaderPath.value;
   if (!p || !window.colorTxt?.writeTextFile) return false;
-  const text = readerRef.value?.getAllText() ?? "";
+  const text = textForReaderDiskSave();
   const r = await window.colorTxt.writeTextFile(p, text, normalized);
   if (!r.ok) {
     void appAlert(r.message ?? "保存失败");

@@ -426,6 +426,12 @@ export function useTxtStreamPipeline(deps: {
     return physicalLineContents[idx] ?? "";
   }
 
+  /** 源文件物理行原文拼接（不含压缩空行/行首缩进等阅读器展示变换） */
+  function getPhysicalFilePlainText(): string {
+    if (physicalLineContents.length === 0) return "";
+    return physicalLineContents.join("\n");
+  }
+
   /** 从当前正文重算章节列表后，同步流式解析用的章节字数累计游标 */
   function setChapterWriteIndex(idx: number) {
     currentChapterIdx = idx;
@@ -468,6 +474,7 @@ export function useTxtStreamPipeline(deps: {
     getPhysicalLineCount,
     getLineCount,
     getPhysicalLineContent,
+    getPhysicalFilePlainText,
     setChapterWriteIndex,
     resyncMirrorFromReader,
     removeFilteredDisplayLinesAtOriginalIndices,
