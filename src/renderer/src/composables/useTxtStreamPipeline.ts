@@ -6,10 +6,7 @@ import {
   physicalLineToLastFilteredDisplayLine,
 } from "../reader/lineMapping";
 import { formatPhysicalLinesForReader } from "../reader/readerDisplayPipeline";
-import {
-  countCharsForLine,
-  floorReadingProgressPercentByLines,
-} from "../utils/format";
+import { floorReadingProgressPercentByLines } from "../utils/format";
 import { createPhysicalLineSplitter } from "../services/physicalLineStream";
 
 type ReaderRef = Ref<InstanceType<typeof ReaderMain> | null>;
@@ -21,9 +18,11 @@ export function useTxtStreamPipeline(deps: {
   readerRef: ReaderRef;
   totalCharCount: Ref<number>;
   totalLineCount: Ref<number>;
+  readerEditMode: Ref<boolean>;
   compressBlankLines: Ref<boolean>;
   compressBlankKeepOneBlank: Ref<boolean>;
   leadIndentFullWidth: Ref<boolean>;
+  chapterMinCharCount: Ref<number>;
   /** 展示正文写入 Monaco 且插图/内链处理完成后 */
   afterFullTextInstalled: () => void | Promise<void>;
 }) {
@@ -126,21 +125,20 @@ export function useTxtStreamPipeline(deps: {
   }
 
   /**
-   * 从阅读器模型同步镜像（插图删行等外部改动后）。
-   * 滤空模式下勿把 map 写成 1..N。
+   * 从阅读器模型同步镜像（插图删行等外部改动后；编辑态输入时）。
+   * 只读且开滤空时勿把 map 写成 1..N（模型为展示文，map 仍由格式化维护）。
    */
   function syncMirrorFromReaderModel() {
-    const text = deps.readerRef.value?.getAllText() ?? "";
+    const reader = deps.readerRef.value;
+    const text = reader?.getAllText() ?? "";
+    deps.totalCharCount.value = text.length;
     const lines = text.length > 0 ? text.split("\n") : [""];
-    let c = 0;
-    for (const ln of lines) {
-      c += countCharsForLine(ln);
-    }
-    deps.totalCharCount.value = c;
 
-    if (!deps.compressBlankLines.value) {
+    if (deps.readerEditMode.value || !deps.compressBlankLines.value) {
       physicalLineContents = lines;
-      lineCount = lines.length;
+      lineCount =
+        reader?.getModelLineCount?.() ??
+        lines.length;
       deps.totalLineCount.value = lineCount;
       filteredDisplayToPhysicalLine = lines.map((_, i) => i + 1);
       return;
@@ -205,11 +203,12 @@ export function useTxtStreamPipeline(deps: {
       compressBlankLines: deps.compressBlankLines.value,
       compressBlankKeepOneBlank: deps.compressBlankKeepOneBlank.value,
       leadIndentFullWidth: deps.leadIndentFullWidth.value,
+      minCharCount: deps.chapterMinCharCount.value,
     });
 
     filteredDisplayToPhysicalLine = formatted.displayLineToPhysicalLine;
     lineCount = formatted.lineCount;
-    deps.totalCharCount.value = formatted.charCount;
+    deps.totalCharCount.value = formatted.text.length;
     deps.totalLineCount.value = formatted.lineCount;
 
     await r.setFullText(formatted.text);

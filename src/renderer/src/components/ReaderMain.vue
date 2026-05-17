@@ -43,7 +43,10 @@ import {
   chapterTitleForDisplay,
   leadingWhitespaceColumnCount,
 } from "../chapter";
-import { formatPhysicalPlainTextForReader } from "../reader/readerDisplayPipeline";
+import {
+  formatPhysicalPlainTextForReader,
+  type ReaderDisplayFormatOptions,
+} from "../reader/readerDisplayPipeline";
 import { physicalLineToLastFilteredDisplayLine } from "../reader/lineMapping";
 import AppContextMenu from "./AppContextMenu.vue";
 import ReaderHighlightFloat from "./ReaderHighlightFloat.vue";
@@ -57,6 +60,7 @@ import {
 } from "../reader/readerEbookPointer";
 import { lookupEbookAnchorPhysicalLine } from "../reader/ebookAnchorLookup";
 import {
+  defaultChapterMinCharCount,
   defaultCompressBlankLines,
   defaultMonacoAdvancedWrapping,
   defaultMonacoCustomHighlight,
@@ -203,6 +207,8 @@ const props = withDefaults(
     readerEditRestorePhysicalLine?: number | null;
     /** 与流式读盘一致的磁盘 txt 路径（编辑读/存用） */
     physicalReaderPath?: string | null;
+    /** 章节最少字数；压缩空行格式化时与侧栏章节表一致，不足者不插入标题上下空行 */
+    chapterMinCharCount?: number;
   }>(),
   {
     monacoCustomHighlight: defaultMonacoCustomHighlight,
@@ -225,6 +231,7 @@ const props = withDefaults(
     readerEditMode: false,
     readerEditRestorePhysicalLine: null,
     physicalReaderPath: null,
+    chapterMinCharCount: defaultChapterMinCharCount,
   },
 );
 
@@ -236,6 +243,7 @@ const emit = defineEmits<{
   addHighlightTerm: [payload: { text: string; colorIndex: number }];
   removeHighlightTerm: [payload: { text: string }];
   readerEditDirtyChange: [dirty: boolean];
+  readerEditContentChange: [];
   readerEditLoaded: [payload: { encoding: string }];
   readerEditLoadFailed: [];
   readerEditSaveRequest: [];
@@ -260,6 +268,13 @@ function emitReaderEditDirtyIfChanged() {
   if (!m || !props.readerEditMode || readerEditSuppressDirty) return;
   const dirty = m.getValue() !== readerEditSavedSnapshot;
   emit("readerEditDirtyChange", dirty);
+}
+
+function onReaderEditModelContentChange() {
+  emitReaderEditDirtyIfChanged();
+  if (readerEditSuppressDirty) return;
+  emit("readerEditContentChange");
+  emitProbeLine(false);
 }
 
 /** 以 Monaco 当前全文为「未修改」基线（须在 setValue / 视口恢复之后调用） */
@@ -312,7 +327,7 @@ async function loadReaderEditFromDisk() {
   applyReaderMonacoModeOptions(true);
   teardownReaderEditContentListener();
   readerEditContentDisposable = m.onDidChangeContent(() => {
-    emitReaderEditDirtyIfChanged();
+    onReaderEditModelContentChange();
   });
   const emitReaderEditLoadedAfterViewport = () => {
     sealReaderEditBaseline();
@@ -403,6 +418,18 @@ function restoreViewportAfterEditFormatByPhysicalLine(
   });
 }
 
+function readerFormatOptions(
+  overrides: Partial<ReaderDisplayFormatOptions> = {},
+): ReaderDisplayFormatOptions {
+  return {
+    compressBlankLines: false,
+    compressBlankKeepOneBlank: false,
+    leadIndentFullWidth: false,
+    minCharCount: props.chapterMinCharCount,
+    ...overrides,
+  };
+}
+
 async function applyEditFormat(
   format: (plain: string) => {
     text: string;
@@ -428,21 +455,22 @@ async function applyEditFormatCompressBlankLines(
   keepOneBlank: boolean,
 ): Promise<boolean> {
   return applyEditFormat((plain) =>
-    formatPhysicalPlainTextForReader(plain, {
-      compressBlankLines: true,
-      compressBlankKeepOneBlank: keepOneBlank,
-      leadIndentFullWidth: false,
-    }),
+    formatPhysicalPlainTextForReader(
+      plain,
+      readerFormatOptions({
+        compressBlankLines: true,
+        compressBlankKeepOneBlank: keepOneBlank,
+      }),
+    ),
   );
 }
 
 async function applyEditFormatLeadIndentFullWidth(): Promise<boolean> {
   return applyEditFormat((plain) =>
-    formatPhysicalPlainTextForReader(plain, {
-      compressBlankLines: false,
-      compressBlankKeepOneBlank: false,
-      leadIndentFullWidth: true,
-    }),
+    formatPhysicalPlainTextForReader(
+      plain,
+      readerFormatOptions({ leadIndentFullWidth: true }),
+    ),
   );
 }
 
@@ -2118,7 +2146,7 @@ watch(
     const m = model.value;
     if (m) {
       readerEditContentDisposable = m.onDidChangeContent(() => {
-        emitReaderEditDirtyIfChanged();
+        onReaderEditModelContentChange();
       });
       sealReaderEditBaseline();
     }

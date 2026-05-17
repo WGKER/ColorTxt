@@ -245,9 +245,14 @@ export function buildChaptersFromPlainText(
 const RE_LEADING_WHITE_FOR_INDENT = /^[\p{White_Space}]+/u;
 const FULL_WIDTH_INDENT_TWO = "　　";
 
-export function applyLeadIndentFullWidth(line: string): string {
+export function applyLeadIndentFullWidth(
+  line: string,
+  options?: { exemptChapterTitle?: boolean },
+): string {
   if (line.trim().length === 0) return line;
-  if (detectChapterTitle(line) != null) return line;
+  const exempt =
+    options?.exemptChapterTitle ?? detectChapterTitle(line) != null;
+  if (exempt) return line;
   return FULL_WIDTH_INDENT_TWO + line.replace(RE_LEADING_WHITE_FOR_INDENT, "");
 }
 

@@ -14,7 +14,7 @@ const unitClass = "章回卷节集部篇";
 export const CHAPTER_MATCH_BUILTIN_MAIN_PATTERN = `^\\s*(第[${cnNumClass}]{1,12}[${unitClass}])\\s*(.{0,40})\\s*$`;
 
 export const CHAPTER_MATCH_BUILTIN_ALT_PATTERN =
-  "^\\s*(序章|楔子|引子|尾声|后记|番外|完结感言)\\s*(.{0,40})\\s*$";
+  "^\\s*(目录|序章|楔子|引子|尾声|后记|番外|完结感言)\\s*(.{0,40})\\s*$";
 
 /** 数字顿号序号章节，如「1、章节名」；应用内默认第二条为 alt、第三条为本条且默认未启用 */
 export const CHAPTER_MATCH_BUILTIN_NUM_ORDERED_PATTERN =

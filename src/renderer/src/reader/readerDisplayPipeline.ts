@@ -11,6 +11,8 @@ export type ReaderDisplayFormatOptions = {
   compressBlankLines: boolean;
   compressBlankKeepOneBlank: boolean;
   leadIndentFullWidth: boolean;
+  /** 与侧栏章节列表一致：不足最少字数的标题行不插入章节上下空行 */
+  minCharCount?: number;
 };
 
 export type ReaderDisplayFormatResult = {
@@ -18,7 +20,6 @@ export type ReaderDisplayFormatResult = {
   /** 展示行号 i（1-based）→ 源物理行号 */
   displayLineToPhysicalLine: number[];
   lineCount: number;
-  charCount: number;
 };
 
 function normalizeNewlines(text: string): string {
@@ -28,10 +29,52 @@ function normalizeNewlines(text: string): string {
 function lineForReaderDisplay(
   rawLine: string,
   leadIndentFullWidth: boolean,
+  qualifiedChapterTitles: ReadonlySet<number>,
+  physicalLine: number,
 ): string {
-  return leadIndentFullWidth
-    ? applyLeadIndentFullWidth(rawLine)
-    : rawLine;
+  if (!leadIndentFullWidth) return rawLine;
+  return applyLeadIndentFullWidth(rawLine, {
+    exemptChapterTitle: qualifiedChapterTitles.has(physicalLine),
+  });
+}
+
+/**
+ * 在物理行上按章节规则扫描，返回「计入侧栏章节表」的标题行物理行号（1-based）。
+ * 字数统计与 {@link buildChaptersFromReaderDisplayText} 一致：不含标题行本身，不含格式化插入的空行。
+ */
+export function collectQualifiedChapterTitlePhysicalLines(
+  physicalLines: readonly string[],
+  options: { minCharCount: number; leadIndentFullWidth: boolean },
+): Set<number> {
+  const floor = Math.max(0, Math.floor(options.minCharCount));
+  const qualified = new Set<number>();
+  const sections: { titlePhysicalLine: number; charCount: number }[] = [];
+  let currentIdx = -1;
+  let physicalLine = 0;
+
+  for (const rawLine of physicalLines) {
+    physicalLine += 1;
+    if (isBlankPhysicalLineContent(rawLine)) continue;
+    const title = detectChapterTitle(rawLine);
+    if (title) {
+      sections.push({ titlePhysicalLine: physicalLine, charCount: 0 });
+      currentIdx = sections.length - 1;
+      if (floor <= 0) qualified.add(physicalLine);
+      continue;
+    }
+    if (currentIdx >= 0) {
+      const shown = options.leadIndentFullWidth
+        ? applyLeadIndentFullWidth(rawLine, { exemptChapterTitle: false })
+        : rawLine;
+      sections[currentIdx]!.charCount += countCharsForLine(shown);
+    }
+  }
+
+  if (floor <= 0) return qualified;
+  for (const s of sections) {
+    if (s.charCount >= floor) qualified.add(s.titlePhysicalLine);
+  }
+  return qualified;
 }
 
 /**
@@ -42,23 +85,34 @@ export function formatPhysicalLinesForReader(
   physicalLines: readonly string[],
   options: ReaderDisplayFormatOptions,
 ): ReaderDisplayFormatResult {
+  const minCharCount = options.minCharCount ?? 0;
+  const qualifiedChapterTitles = collectQualifiedChapterTitlePhysicalLines(
+    physicalLines,
+    {
+      minCharCount,
+      leadIndentFullWidth: options.leadIndentFullWidth,
+    },
+  );
+
   if (!options.compressBlankLines) {
     const out: string[] = [];
     const displayLineToPhysicalLine: number[] = [];
-    let charCount = 0;
     let physicalLine = 0;
     for (const rawLine of physicalLines) {
       physicalLine += 1;
-      const shown = lineForReaderDisplay(rawLine, options.leadIndentFullWidth);
+      const shown = lineForReaderDisplay(
+        rawLine,
+        options.leadIndentFullWidth,
+        qualifiedChapterTitles,
+        physicalLine,
+      );
       out.push(shown);
       displayLineToPhysicalLine.push(physicalLine);
-      charCount += countCharsForLine(shown);
     }
     return {
       text: out.join("\n"),
       displayLineToPhysicalLine,
       lineCount: out.length,
-      charCount,
     };
   }
 
@@ -66,21 +120,26 @@ export function formatPhysicalLinesForReader(
   const blanksAbove = keepOneBlank ? 1 : 2;
   const out: string[] = [];
   const displayLineToPhysicalLine: number[] = [];
-  let charCount = 0;
 
   const pushDisplay = (lineText: string, physicalLine: number) => {
     displayLineToPhysicalLine.push(physicalLine);
     out.push(lineText);
-    charCount += countCharsForLine(lineText);
   };
 
   let physicalLine = 0;
   for (const rawLine of physicalLines) {
     physicalLine += 1;
     if (isBlankPhysicalLineContent(rawLine)) continue;
-    const shown = lineForReaderDisplay(rawLine, options.leadIndentFullWidth);
-    const title = detectChapterTitle(rawLine);
-    if (title) {
+    const shown = lineForReaderDisplay(
+      rawLine,
+      options.leadIndentFullWidth,
+      qualifiedChapterTitles,
+      physicalLine,
+    );
+    const isQualifiedChapterTitle =
+      detectChapterTitle(rawLine) != null &&
+      qualifiedChapterTitles.has(physicalLine);
+    if (isQualifiedChapterTitle) {
       for (let i = 0; i < blanksAbove; i += 1) {
         pushDisplay("", physicalLine);
       }
@@ -96,7 +155,6 @@ export function formatPhysicalLinesForReader(
     text: out.join("\n"),
     displayLineToPhysicalLine,
     lineCount: out.length,
-    charCount,
   };
 }
 

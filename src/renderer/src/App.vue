@@ -651,9 +651,11 @@ const stream = useTxtStreamPipeline({
   readerRef,
   totalCharCount,
   totalLineCount,
+  readerEditMode,
   compressBlankLines,
   compressBlankKeepOneBlank,
   leadIndentFullWidth,
+  chapterMinCharCount,
   afterFullTextInstalled: () => afterStreamFullTextInstalled(),
 });
 
@@ -1321,11 +1323,16 @@ function onReaderEditLoaded(payload: { encoding: string }) {
     (payload.encoding || "utf8").trim() || "utf8",
   );
   pendingReaderEditRestorePhysicalLine.value = null;
+  stream.resyncMirrorFromReader();
   try {
     chapterNav.refreshChapterListFromReader();
   } finally {
     suppressChapterListAutoScroll.value = false;
   }
+}
+
+function onReaderEditContentChange() {
+  stream.resyncMirrorFromReader();
 }
 
 function onReaderEditLoadFailed() {
@@ -1843,7 +1850,23 @@ async function applySettings(payload: SettingsApplyPayload) {
   applyRecentFilesHistoryLimitFromSettings();
   readerRef.value?.setWrappingStrategyAdvanced(monacoAdvancedWrapping.value);
   showSettingsPanel.value = false;
-  if (prevChapterMinCharCount !== chapterMinCharCount.value) {
+  if (
+    prevChapterMinCharCount !== chapterMinCharCount.value &&
+    compressBlankLines.value &&
+    currentFile.value &&
+    !readerEditMode.value
+  ) {
+    const physicalP = captureViewportAnchorPhysicalLine();
+    void withChapterListScrollSuppressed(async () => {
+      const ok = await stream.applyReaderDisplayFromPhysicalLines(physicalP);
+      if (!ok) {
+        chapterMinCharCount.value = prevChapterMinCharCount;
+        persistSettings();
+        return;
+      }
+      await syncChaptersAfterViewportSettled();
+    });
+  } else if (prevChapterMinCharCount !== chapterMinCharCount.value) {
     chapterNav.refreshChapterListFromReader();
   }
 
@@ -2202,6 +2225,7 @@ useAppShellThemeWatch({
           :monaco-custom-highlight="monacoCustomHighlight"
           :txtr-delimited-match-cross-line="txtrDelimitedMatchCrossLine"
           :compress-blank-lines="compressBlankLines"
+          :chapter-min-char-count="chapterMinCharCount"
           :monaco-advanced-wrapping="monacoAdvancedWrapping"
           :monaco-smooth-scrolling="monacoSmoothScrolling"
           :stream-loading="loading"
@@ -2229,6 +2253,7 @@ useAppShellThemeWatch({
           @add-highlight-term="onAddHighlightTerm"
           @remove-highlight-term="onRemoveHighlightTerm"
           @reader-edit-dirty-change="onReaderEditDirtyChange"
+          @reader-edit-content-change="onReaderEditContentChange"
           @reader-edit-loaded="onReaderEditLoaded"
           @reader-edit-load-failed="onReaderEditLoadFailed"
           @reader-edit-save-request="onSaveReaderFile"
