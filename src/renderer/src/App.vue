@@ -1266,6 +1266,20 @@ async function onSaveReaderFile() {
   void (await saveReaderBufferWithIpcEncoding(readerSaveEncoding.value));
 }
 
+function onFormatEditCompressBlankLines() {
+  if (!readerEditMode.value) return;
+  const changed = readerRef.value?.applyEditFormatCompressBlankLines?.(
+    compressBlankKeepOneBlank.value,
+  );
+  if (changed) applyChaptersFromReaderPlainText();
+}
+
+function onFormatEditLeadIndentFullWidth() {
+  if (!readerEditMode.value) return;
+  const changed = readerRef.value?.applyEditFormatLeadIndentFullWidth?.();
+  if (changed) applyChaptersFromReaderPlainText();
+}
+
 async function onFooterSaveFileAsEncoding(codec: "utf8" | "gb2312") {
   void (await saveReaderBufferWithIpcEncoding(codec));
 }
@@ -1970,6 +1984,8 @@ useAppShellThemeWatch({
         @toggle-monaco-custom-highlight="toggleMonacoCustomHighlight"
         @toggle-compress-blank-lines="toggleCompressBlankLines"
         @toggle-lead-indent-full-width="toggleLeadIndentFullWidth"
+        @format-edit-compress-blank-lines="onFormatEditCompressBlankLines"
+        @format-edit-lead-indent-full-width="onFormatEditLeadIndentFullWidth"
         @toggle-find="onToggleFind"
         @open-chapter-rules="
           chapterRuleErrorText = '';

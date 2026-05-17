@@ -76,6 +76,10 @@ const emit = defineEmits<{
   decreaseLineHeight: [];
   toggleCompressBlankLines: [];
   toggleLeadIndentFullWidth: [];
+  /** 编辑模式：对当前全文执行压缩空行 */
+  formatEditCompressBlankLines: [];
+  /** 编辑模式：对当前全文执行行首缩进 */
+  formatEditLeadIndentFullWidth: [];
   toggleMonacoAdvancedWrapping: [];
   toggleMonacoCustomHighlight: [];
   toggleFind: [];
@@ -197,24 +201,42 @@ const vrFormatLock = computed(() => props.voiceReadHeaderLocked);
           />
         </div>
         <span class="toolbarDivider" aria-hidden="true"></span>
-        <IconButton
-          :icon-html="icons.compress"
-          :active="compressBlankLines"
-          :pressed="compressBlankLines"
-          title="压缩空行"
-          aria-label="压缩空行"
-          :disabled="vrFormatLock || readerEditMode"
-          @click="emit('toggleCompressBlankLines')"
-        />
-        <IconButton
-          :icon-html="icons.indent"
-          :active="leadIndentFullWidth"
-          :pressed="leadIndentFullWidth"
-          title="行首缩进"
-          aria-label="行首缩进"
-          :disabled="vrFormatLock || readerEditMode"
-          @click="emit('toggleLeadIndentFullWidth')"
-        />
+        <template v-if="!readerEditMode">
+          <IconButton
+            :icon-html="icons.compress"
+            :active="compressBlankLines"
+            :pressed="compressBlankLines"
+            title="压缩空行"
+            aria-label="压缩空行"
+            :disabled="vrFormatLock"
+            @click="emit('toggleCompressBlankLines')"
+          />
+          <IconButton
+            :icon-html="icons.indent"
+            :active="leadIndentFullWidth"
+            :pressed="leadIndentFullWidth"
+            title="行首缩进"
+            aria-label="行首缩进"
+            :disabled="vrFormatLock"
+            @click="emit('toggleLeadIndentFullWidth')"
+          />
+        </template>
+        <template v-else>
+          <IconButton
+            :icon-html="icons.compress"
+            title="格式化：压缩空行"
+            aria-label="格式化：压缩空行"
+            :disabled="vrFormatLock"
+            @click="emit('formatEditCompressBlankLines')"
+          />
+          <IconButton
+            :icon-html="icons.indent"
+            title="格式化：行首缩进"
+            aria-label="格式化：行首缩进"
+            :disabled="vrFormatLock"
+            @click="emit('formatEditLeadIndentFullWidth')"
+          />
+        </template>
       </div>
       <IconButton
         :icon-html="icons.advancedWrapping"

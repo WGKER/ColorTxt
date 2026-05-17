@@ -43,6 +43,11 @@ import {
   chapterTitleForDisplay,
   leadingWhitespaceColumnCount,
 } from "../chapter";
+import {
+  formatPlainTextCompressBlankLinesWithMap,
+  formatPlainTextLeadIndentFullWidth,
+} from "../reader/readerTextFormat";
+import { physicalLineToLastFilteredDisplayLine } from "../reader/lineMapping";
 import AppContextMenu from "./AppContextMenu.vue";
 import ReaderHighlightFloat from "./ReaderHighlightFloat.vue";
 import ReaderImageLightbox from "./ReaderImageLightbox.vue";
@@ -318,6 +323,100 @@ async function loadReaderEditFromDisk() {
 function markReaderEditSaved() {
   readerEditSavedSnapshot = model.value?.getValue() ?? "";
   emit("readerEditDirtyChange", false);
+}
+
+/** `setValue` 会清空撤销栈；格式化须走 `executeEdits` 以便 Ctrl+Z 撤销。 */
+function replaceModelTextWithUndo(text: string): boolean {
+  const e = editor.value;
+  const m = model.value;
+  if (!e || !m) return false;
+  if (text === m.getValue()) return false;
+  /** 前后各 `pushUndoStop`，避免连续两次格式化被合并为一次撤销 */
+  e.pushUndoStop();
+  const ok = e.executeEdits("readerEditFormat", [
+    {
+      range: m.getFullModelRange(),
+      text,
+    },
+  ]);
+  if (ok) e.pushUndoStop();
+  return ok;
+}
+
+/**
+ * 与只读切换「压缩空行」一致：视口末行 → 物理行，格式化后按物理行找回显示行并贴底对齐。
+ */
+function restoreViewportAfterEditFormatByPhysicalLine(
+  anchorPhysicalLine: number,
+  sourcePhysicalLineCount: number,
+  displayLineToPhysicalLine?: readonly number[],
+) {
+  const m = model.value;
+  if (!m) return;
+  const totalPhysical = Math.max(1, sourcePhysicalLineCount);
+  const phys = Math.min(Math.max(1, Math.floor(anchorPhysicalLine)), totalPhysical);
+
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      if (phys >= totalPhysical) {
+        scrollToBottom(false);
+      } else if (phys <= 1) {
+        jumpToLine(1, false);
+      } else {
+        let jumpLine =
+          displayLineToPhysicalLine != null
+            ? physicalLineToLastFilteredDisplayLine(
+                phys,
+                displayLineToPhysicalLine,
+              )
+            : phys;
+        const maxDisplay = Math.max(1, m.getLineCount());
+        jumpLine = Math.min(Math.max(1, jumpLine), maxDisplay);
+        if (jumpLine <= 1) {
+          jumpToLine(1, false);
+        } else {
+          scrollLineToBottom(jumpLine, false);
+        }
+      }
+      void nextTick(() => {
+        normalizeScrollAfterEmbeddedViewZones();
+        emitProbeLine(false);
+        editor.value?.focus();
+      });
+    });
+  });
+}
+
+function applyEditFormatCompressBlankLines(keepOneBlank: boolean): boolean {
+  const m = model.value;
+  if (!m || !props.readerEditMode) return false;
+  const anchorPhysical = Math.max(1, Math.floor(getViewportEndLine()));
+  const sourcePhysicalLineCount = m.getLineCount();
+  const { text, displayLineToPhysicalLine } =
+    formatPlainTextCompressBlankLinesWithMap(m.getValue(), keepOneBlank);
+  if (!replaceModelTextWithUndo(text)) return false;
+  emitReaderEditDirtyIfChanged();
+  restoreViewportAfterEditFormatByPhysicalLine(
+    anchorPhysical,
+    sourcePhysicalLineCount,
+    displayLineToPhysicalLine,
+  );
+  return true;
+}
+
+function applyEditFormatLeadIndentFullWidth(): boolean {
+  const m = model.value;
+  if (!m || !props.readerEditMode) return false;
+  const anchorPhysical = Math.max(1, Math.floor(getViewportEndLine()));
+  const sourcePhysicalLineCount = m.getLineCount();
+  const next = formatPlainTextLeadIndentFullWidth(m.getValue());
+  if (!replaceModelTextWithUndo(next)) return false;
+  emitReaderEditDirtyIfChanged();
+  restoreViewportAfterEditFormatByPhysicalLine(
+    anchorPhysical,
+    sourcePhysicalLineCount,
+  );
+  return true;
 }
 
 const HL_TIP_H = 36;
@@ -1713,6 +1812,8 @@ defineExpose({
   getViewportTopLine,
   getViewportLineSpan,
   getAllText,
+  applyEditFormatCompressBlankLines,
+  applyEditFormatLeadIndentFullWidth,
   markReaderEditSaved,
   getEditorLineContent,
   getModelLineCount,
