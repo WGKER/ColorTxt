@@ -47,7 +47,12 @@ import {
   formatPhysicalPlainTextForReader,
   type ReaderDisplayFormatOptions,
 } from "../reader/readerDisplayPipeline";
-import { physicalLineToLastFilteredDisplayLine } from "../reader/lineMapping";
+import {
+  captureReaderViewportRestoreAnchor,
+  computeScrollTopForReaderViewportRestoreAnchor,
+  resolveDisplayLineForViewportRestore,
+  type ReaderViewportRestoreAnchor,
+} from "../reader/readerViewportAnchor";
 import AppContextMenu from "./AppContextMenu.vue";
 import ReaderHighlightFloat from "./ReaderHighlightFloat.vue";
 import ReaderImageLightbox from "./ReaderImageLightbox.vue";
@@ -374,49 +379,56 @@ function setModelTextIfChanged(text: string): boolean {
   return true;
 }
 
-/**
- * 与只读切换「压缩空行」一致：视口末行 → 物理行，格式化后按物理行找回显示行并贴底对齐。
- */
-function restoreViewportAfterEditFormatByPhysicalLine(
-  anchorPhysicalLine: number,
-  sourcePhysicalLineCount: number,
+function resolveDisplayLineToPhysical(displayLine: number): number {
+  const map =
+    typeof props.ebookDisplayLineToPhysical === "function"
+      ? props.ebookDisplayLineToPhysical
+      : (d: number) => d;
+  return Math.max(1, Math.floor(map(displayLine)));
+}
+
+function captureViewportRestoreAnchor(): ReaderViewportRestoreAnchor | null {
+  const e = editor.value;
+  const m = model.value;
+  if (!e || !m) return null;
+  return captureReaderViewportRestoreAnchor(e, m, resolveDisplayLineToPhysical);
+}
+
+function restoreViewportToRestoreAnchor(
+  anchor: ReaderViewportRestoreAnchor,
   displayLineToPhysicalLine?: readonly number[],
 ): Promise<void> {
+  const e = editor.value;
   const m = model.value;
-  if (!m) return Promise.resolve();
-  const totalPhysical = Math.max(1, sourcePhysicalLineCount);
-  const phys = Math.min(
-    Math.max(1, Math.floor(anchorPhysicalLine)),
-    totalPhysical,
-  );
+  if (!e || !m) return Promise.resolve();
 
   return new Promise((resolve) => {
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        if (phys >= totalPhysical) {
+        beginProgrammaticScroll();
+        const scrollTop = computeScrollTopForReaderViewportRestoreAnchor(
+          e,
+          m,
+          anchor,
+          displayLineToPhysicalLine,
+        );
+        if (scrollTop != null) {
+          e.setScrollTop(scrollTop, monacoScrollType(false));
+          const displayLine = resolveDisplayLineForViewportRestore(
+            anchor.physicalLine,
+            m.getLineCount(),
+            displayLineToPhysicalLine,
+          );
+          e.setPosition({ lineNumber: displayLine, column: 1 });
+        } else if (anchor.physicalLine >= m.getLineCount()) {
           scrollToBottom(false);
-        } else if (phys <= 1) {
-          jumpToLine(1, false);
         } else {
-          let jumpLine =
-            displayLineToPhysicalLine != null
-              ? physicalLineToLastFilteredDisplayLine(
-                  phys,
-                  displayLineToPhysicalLine,
-                )
-              : phys;
-          const maxDisplay = Math.max(1, m.getLineCount());
-          jumpLine = Math.min(Math.max(1, jumpLine), maxDisplay);
-          if (jumpLine <= 1) {
-            jumpToLine(1, false);
-          } else {
-            scrollLineToBottom(jumpLine, false);
-          }
+          jumpToLine(1, false);
         }
         void nextTick(() => {
           normalizeScrollAfterEmbeddedViewZones();
           emitProbeLine(false);
-          editor.value?.focus();
+          e.focus();
           resolve();
         });
       });
@@ -444,16 +456,17 @@ async function applyEditFormat(
 ): Promise<boolean> {
   const m = model.value;
   if (!m || !props.readerEditMode) return false;
-  const anchorPhysical = Math.max(1, Math.floor(getViewportEndLine()));
-  const sourcePhysicalLineCount = m.getLineCount();
+  const anchor =
+    captureViewportRestoreAnchor() ?? {
+      physicalLine: resolveDisplayLineToPhysical(
+        Math.max(1, Math.floor(getViewportEndLine())),
+      ),
+      wrappedLineIndex: 0,
+    };
   const { text, displayLineToPhysicalLine } = format(m.getValue());
   if (!setModelTextIfChanged(text)) return false;
   emitReaderEditDirtyIfChanged();
-  await restoreViewportAfterEditFormatByPhysicalLine(
-    anchorPhysical,
-    sourcePhysicalLineCount,
-    displayLineToPhysicalLine,
-  );
+  await restoreViewportToRestoreAnchor(anchor, displayLineToPhysicalLine);
   return true;
 }
 
@@ -1878,6 +1891,8 @@ defineExpose({
   hasInlineSearchQuery: inlineSearch.hasInlineSearchQuery,
   jumpToBookmarkLine,
   getBookmarkSaveAnchorDisplayLine,
+  captureViewportRestoreAnchor,
+  restoreViewportToRestoreAnchor,
   setInlineSearchState: inlineSearch.setInlineSearchState,
   clearInlineSearchState: inlineSearch.clearInlineSearchState,
   emitProbeLine,

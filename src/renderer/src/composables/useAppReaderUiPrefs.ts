@@ -121,15 +121,23 @@ export function useAppReaderUiPrefs(deps: {
       deps.persistSettings();
       return;
     }
-    const endLine =
-      deps.readerRef.value?.getViewportEndLine?.() ?? deps.viewportEndLine.value;
-    const physicalP = deps.stream.viewportDisplayLineToPhysicalLine(
-      Math.max(1, Math.floor(endLine)),
-    );
+    const anchor =
+      deps.readerRef.value?.captureViewportRestoreAnchor?.() ?? {
+        physicalLine: deps.stream.viewportDisplayLineToPhysicalLine(
+          Math.max(
+            1,
+            Math.floor(
+              deps.readerRef.value?.getViewportEndLine?.() ??
+                deps.viewportEndLine.value,
+            ),
+          ),
+        ),
+        wrappedLineIndex: 0,
+      };
     await deps.withChapterListScrollSuppressed(async () => {
       applyNext();
       deps.persistSettings();
-      const ok = await deps.stream.applyReaderDisplayFromPhysicalLines(physicalP);
+      const ok = await deps.stream.applyReaderDisplayFromPhysicalLines(anchor);
       if (!ok) {
         revert();
         deps.persistSettings();

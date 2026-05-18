@@ -9,6 +9,7 @@ import {
   physicalLineToLastFilteredDisplayLine,
 } from "../reader/lineMapping";
 import { formatPhysicalLinesForReader } from "../reader/readerDisplayPipeline";
+import type { ReaderViewportRestoreAnchor } from "../reader/readerViewportAnchor";
 import { floorReadingProgressPercentByLines } from "../utils/format";
 import { createPhysicalLineSplitter } from "../services/physicalLineStream";
 
@@ -197,7 +198,7 @@ export function useTxtStreamPipeline(deps: {
    * 由已缓存的物理行生成展示正文并写入 Monaco（加载完成 / 切换压缩或缩进 / 保留一空行设置）。
    */
   async function applyReaderDisplayFromPhysicalLines(
-    restorePhysicalLine?: number,
+    restore?: ReaderViewportRestoreAnchor | number,
   ): Promise<boolean> {
     const r = deps.readerRef.value;
     if (!r) return false;
@@ -219,7 +220,13 @@ export function useTxtStreamPipeline(deps: {
       r.normalizeLastLineLeadIndent?.();
     }
     await deps.afterFullTextInstalled();
-    await restoreViewportAfterDisplayChange(restorePhysicalLine);
+    if (restore != null && typeof restore === "object") {
+      await deps.readerRef.value?.restoreViewportToRestoreAnchor?.(restore, [
+        ...filteredDisplayToPhysicalLine,
+      ]);
+    } else if (typeof restore === "number") {
+      await restoreViewportAfterDisplayChange(restore);
+    }
     return true;
   }
 

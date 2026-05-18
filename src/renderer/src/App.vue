@@ -698,6 +698,10 @@ function captureViewportAnchorPhysicalLine(): number {
   return stream.viewportDisplayLineToPhysicalLine(endLine);
 }
 
+function captureViewportRestoreAnchor() {
+  return readerRef.value?.captureViewportRestoreAnchor?.() ?? null;
+}
+
 async function withChapterListScrollSuppressed<T>(
   fn: () => Promise<T> | T,
 ): Promise<T> {
@@ -1903,9 +1907,13 @@ async function applySettings(payload: SettingsApplyPayload) {
     currentFile.value &&
     !readerEditMode.value
   ) {
-    const physicalP = captureViewportAnchorPhysicalLine();
+    const anchor =
+      captureViewportRestoreAnchor() ?? {
+        physicalLine: captureViewportAnchorPhysicalLine(),
+        wrappedLineIndex: 0,
+      };
     void withChapterListScrollSuppressed(async () => {
-      const ok = await stream.applyReaderDisplayFromPhysicalLines(physicalP);
+      const ok = await stream.applyReaderDisplayFromPhysicalLines(anchor);
       if (!ok) {
         chapterMinCharCount.value = prevChapterMinCharCount;
         persistSettings();
@@ -1923,9 +1931,13 @@ async function applySettings(payload: SettingsApplyPayload) {
     currentFile.value &&
     !readerEditMode.value
   ) {
-    const physicalP = captureViewportAnchorPhysicalLine();
+    const anchor =
+      captureViewportRestoreAnchor() ?? {
+        physicalLine: captureViewportAnchorPhysicalLine(),
+        wrappedLineIndex: 0,
+      };
     void withChapterListScrollSuppressed(async () => {
-      const ok = await stream.applyReaderDisplayFromPhysicalLines(physicalP);
+      const ok = await stream.applyReaderDisplayFromPhysicalLines(anchor);
       if (!ok) {
         compressBlankKeepOneBlank.value = prevCompressBlankKeepOneBlank;
         persistSettings();
