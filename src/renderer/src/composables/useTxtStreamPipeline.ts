@@ -129,27 +129,31 @@ export function useTxtStreamPipeline(deps: {
   }
 
   /**
-   * 从阅读器模型同步镜像（插图删行等外部改动后；编辑态输入时）。
-   * 只读且开滤空时勿把 map 写成 1..N（模型为展示文，map 仍由格式化维护）。
+   * 从阅读器模型同步镜像（编辑态输入时；只读仅更新字数/行数统计）。
+   * 只读时 **不得** 用 Monaco 展示文覆盖 `physicalLineContents`（含行首缩进、滤空后的展示层），
+   * 否则关闭「行首缩进」无法从源物理行重新生成原文。
    */
   function syncMirrorFromReaderModel() {
     const reader = deps.readerRef.value;
     const text = reader?.getAllText() ?? "";
     deps.totalCharCount.value = text.length;
-    const lines = text.length > 0 ? text.split("\n") : [""];
 
-    if (deps.readerEditMode.value || !deps.compressBlankLines.value) {
-      physicalLineContents = lines;
-      lineCount =
-        reader?.getModelLineCount?.() ??
-        lines.length;
+    if (!deps.readerEditMode.value) {
+      if (deps.compressBlankLines.value) {
+        lineCount = filteredDisplayToPhysicalLine.length;
+      } else {
+        lineCount =
+          reader?.getModelLineCount?.() ?? physicalLineContents.length;
+      }
       deps.totalLineCount.value = lineCount;
-      filteredDisplayToPhysicalLine = lines.map((_, i) => i + 1);
       return;
     }
 
-    lineCount = filteredDisplayToPhysicalLine.length;
+    const lines = text.length > 0 ? text.split("\n") : [""];
+    physicalLineContents = lines;
+    lineCount = reader?.getModelLineCount?.() ?? lines.length;
     deps.totalLineCount.value = lineCount;
+    filteredDisplayToPhysicalLine = lines.map((_, i) => i + 1);
   }
 
   function processChunk(chunk: string) {
