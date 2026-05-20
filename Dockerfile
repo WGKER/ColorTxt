@@ -21,4 +21,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY --from=builder /app .
 
+EXPOSE 1567
+
 CMD ["xvfb-run", "npm", "run", "dev"]
