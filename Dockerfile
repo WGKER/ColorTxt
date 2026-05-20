@@ -1,10 +1,19 @@
 # 构建阶段
 FROM --platform=linux/arm64 node:20-bookworm-slim AS builder
 WORKDIR /app
+
+# 安装系统依赖（修复 better-sqlite3 编译失败）
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential python3 pkg-config \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY package*.json ./
 RUN npm ci
+
 COPY . .
-RUN npm run build -- --linux arm64
+
+# 🔥 修复：正确的 ARM64 构建命令
+RUN npm run build -- --arm64
 
 # 运行阶段
 FROM --platform=linux/arm64 debian:bookworm-slim
@@ -16,8 +25,4 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 COPY --from=builder /app/dist/linux-arm64-unpacked .
 
-# 🟢 定义容器内目录：用于存放书籍、配置、缓存
-VOLUME ["/app/books", "/app/config", "/app/cache"]
-
-# 无头运行
 CMD ["xvfb-run", "./ColorTxt"]
