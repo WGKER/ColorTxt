@@ -1,26 +1,41 @@
 name: Build ColorTxt ARM64 Docker Image
+
+# 🔥 关键：只在修改本 yml 文件时自动打包
 on:
-  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/docker-build.yml'  # 只有改这个文件才触发
+  workflow_dispatch:  # 保留手动运行
+
+# 统一命名：只改这里
+env:
+  IMAGE_NAME: colortxt
+  IMAGE_TAG: arm64
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+
       - name: Build ARM64 Image
         uses: docker/build-push-action@v6
         with:
           context: .
           platforms: linux/arm64
           push: false
-          outputs: type=docker,dest=/tmp/colortxt-arm64.tar
-          tags: colortxt:arm64
+          outputs: type=docker,dest=/tmp/${{ env.IMAGE_NAME }}-${{ env.IMAGE_TAG }}.tar
+          tags: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+
       - name: Upload Image
         uses: actions/upload-artifact@v4
         with:
-          name: colortxt-docker-arm64
-          path: /tmp/colortxt-arm64.tar
+          name: ${{ env.IMAGE_NAME }}-${{ env.IMAGE_TAG }}.tar
+          path: /tmp/${{ env.IMAGE_NAME }}-${{ env.IMAGE_TAG }}.tar
+          retention-days: 30
