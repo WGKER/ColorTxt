@@ -6,7 +6,9 @@ on:
       - '.github/workflows/docker-build.yml'
   workflow_dispatch:
 
+# 消除所有警告 + 统一命名
 env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   IMAGE_NAME: colortxt
   IMAGE_TAG: 2.2.0-arm64
 
