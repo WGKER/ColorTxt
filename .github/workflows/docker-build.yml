@@ -6,9 +6,7 @@ on:
       - '.github/workflows/docker-build.yml'
   workflow_dispatch:
 
-# 消除所有警告 + 统一命名
 env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   IMAGE_NAME: colortxt
   IMAGE_TAG: 2.2.0-arm64
 
@@ -16,15 +14,13 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
+      - uses: actions/checkout@v5
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build ARM64 Image
+      - name: Build and export
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -33,9 +29,5 @@ jobs:
           outputs: type=docker,dest=/tmp/${{ env.IMAGE_NAME }}-${{ env.IMAGE_TAG }}.tar
           tags: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
 
-      - name: Upload Image
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
-        with:
-          name: ${{ env.IMAGE_NAME }}-${{ env.IMAGE_TAG }}
-          path: /tmp/${{ env.IMAGE_NAME }}-${{ env.IMAGE_TAG }}.tar
-          retention-days: 30
