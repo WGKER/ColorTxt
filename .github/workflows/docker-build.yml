@@ -6,7 +6,9 @@ on:
       - '.github/workflows/docker-build.yml'
   workflow_dispatch:
 
+# 🔥 加这一行，强制使用 Node24，警告直接消失
 env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   IMAGE_NAME: colortxt
   IMAGE_TAG: 2.2.0-arm64
 
@@ -15,14 +17,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build and export Docker image
+      - name: Build image
         uses: docker/build-push-action@v6
         with:
           context: .
