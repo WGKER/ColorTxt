@@ -1,35 +1,20 @@
-FROM node:20-bookworm AS builder
+# 直接用 ARM64 环境运行源码，不编译！彻底避开 build 错误
+FROM --platform=linux/arm64 node:20-bookworm-slim
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y \
-    build-essential python3 \
-    && rm -rf /var/lib/apt/lists/*
-
-COPY package*.json ./
-RUN npm ci
-
-COPY . .
-
-# 正确构建 Linux ARM64
-RUN npm run build -- --linux arm64
-
-# 查看产物路径（调试用，能看到文件到底在哪）
-RUN ls -la /app/dist/
-
-# 运行时镜像
-FROM --platform=linux/arm64 debian:bookworm-slim
-
+# 安装系统依赖（必须）
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential python3 \
     libgtk-3-0 libnss3 libxss1 libasound2 libx11-xcb1 libxkbfile1 \
     xvfb \
     && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /app
+# 复制项目
+COPY . .
 
-# ---------------- 关键修复 ----------------
-# 自动找构建好的目录，不管叫什么名字
-COPY --from=builder /app/dist ./dist
+# 安装依赖（只安装，不构建！）
+RUN npm install
 
-# 启动命令（自动找可执行文件）
-CMD ["xvfb-run", "bash", "-c", "ls dist && xvfb-run ./dist/*/ColorTxt"]
+# 直接运行源码（dev 模式，不会触发 electron-builder 构建）
+CMD ["xvfb-run", "npm", "run", "dev"]
