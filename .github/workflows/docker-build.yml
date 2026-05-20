@@ -22,7 +22,7 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build and export
+      - name: Build ARM64 Image
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -31,7 +31,7 @@ jobs:
           outputs: type=docker,dest=/tmp/${{ env.IMAGE_NAME }}-${{ env.IMAGE_TAG }}.tar
           tags: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
 
-      - name: Upload artifact
+      - name: Upload Image
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.IMAGE_NAME }}-${{ env.IMAGE_TAG }}
