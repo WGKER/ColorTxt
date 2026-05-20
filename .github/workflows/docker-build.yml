@@ -6,7 +6,6 @@ on:
       - '.github/workflows/docker-build.yml'
   workflow_dispatch:
 
-# 统一配置，只改这里
 env:
   IMAGE_NAME: colortxt
   IMAGE_TAG: 2.2.0-arm64
@@ -23,8 +22,7 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # ✅ 修复版构建（无跨平台错误）
-      - name: Build ARM64 Image
+      - name: Build and export
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -32,13 +30,10 @@ jobs:
           push: false
           outputs: type=docker,dest=/tmp/${{ env.IMAGE_NAME }}-${{ env.IMAGE_TAG }}.tar
           tags: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
-          # 关键修复：增加构建权限和依赖
-          secrets: |
-            GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload Image
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.IMAGE_NAME }}-${{ env.IMAGE_TAG }}-image
+          name: ${{ env.IMAGE_NAME }}-${{ env.IMAGE_TAG }}
           path: /tmp/${{ env.IMAGE_NAME }}-${{ env.IMAGE_TAG }}.tar
           retention-days: 30
