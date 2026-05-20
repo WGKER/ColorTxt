@@ -1,0 +1,26 @@
+name: Build ColorTxt ARM64 Docker Image
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Build ARM64 Image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/arm64
+          push: false
+          outputs: type=docker,dest=/tmp/colortxt-arm64.tar
+          tags: colortxt:arm64
+      - name: Upload Image
+        uses: actions/upload-artifact@v4
+        with:
+          name: colortxt-docker-arm64
+          path: /tmp/colortxt-arm64.tar
