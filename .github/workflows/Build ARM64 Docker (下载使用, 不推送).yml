@@ -1,0 +1,38 @@
+name: Build ARM64 Docker (下载使用, 不推送)
+
+on:
+  workflow_dispatch:
+
+# ====================== 【只需在这里改一次】======================
+env:
+  IMAGE_NAME: colortxt       # 镜像名称
+  IMAGE_TAG: arm64-0521           # 镜像标签
+# ================================================================
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout 代码
+        uses: actions/checkout@v4
+
+      - name: 开启 ARM 跨平台支持
+        uses: docker/setup-qemu-action@v3
+
+      - name: 配置 Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: 构建 ARM64 镜像并导出
+        run: |
+          docker buildx build --platform linux/arm64 \
+            -t ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }} \
+            -o type=docker,dest=${{ env.IMAGE_NAME }}-${{ env.IMAGE_TAG }}.tar .
+
+      - name: 上传镜像文件
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.IMAGE_NAME }}-${{ env.IMAGE_TAG }}.tar
+          path: ${{ env.IMAGE_NAME }}-${{ env.IMAGE_TAG }}.tar
